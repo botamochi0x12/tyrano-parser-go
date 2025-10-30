@@ -40,8 +40,8 @@ func NewDefaultTyranoParser() *TyranoParser {
 
 // ParseScenario parses a scenario file content and returns a ParsedScenario
 func (tp *TyranoParser) ParseScenario(content string) (*types.ParsedScenario, error) {
-	// Implementation will be added in later tasks
-	return types.NewParsedScenario(), nil
+	scenarioParser := NewScenarioParser()
+	return scenarioParser.Parse(content)
 }
 
 // ParseConfig parses a Config.tjs file content and returns a ConfigMap
