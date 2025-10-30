@@ -46,6 +46,6 @@ func (tp *TyranoParser) ParseScenario(content string) (*types.ParsedScenario, er
 
 // ParseConfig parses a Config.tjs file content and returns a ConfigMap
 func (tp *TyranoParser) ParseConfig(content string) (types.ConfigMap, error) {
-	// Implementation will be added in later tasks
-	return types.NewConfigMap(), nil
+	configParser := NewConfigParser(tp.options.StrictMode)
+	return configParser.Parse(content)
 }
