@@ -2,7 +2,7 @@ package parser
 
 import (
 	"testing"
-	"github.com/tyranoscript/tyrano-parser-go/types"
+	"github.com/botamochi0x12/tyrano-parser-go/types"
 )
 
 func TestNewTagParser(t *testing.T) {
@@ -23,11 +23,11 @@ func TestNewTagParser(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			parser := NewTagParser(tt.keepSpaceConfig)
-			
+
 			if parser == nil {
 				t.Fatal("NewTagParser() returned nil")
 			}
-			
+
 			if parser.keepSpaceConfig != tt.keepSpaceConfig {
 				t.Errorf("NewTagParser().keepSpaceConfig = %v, want %v", parser.keepSpaceConfig, tt.keepSpaceConfig)
 			}
@@ -37,7 +37,7 @@ func TestNewTagParser(t *testing.T) {
 
 func TestTagParser_ParseTag_BasicTags(t *testing.T) {
 	parser := NewTagParser("false")
-	
+
 	tests := []struct {
 		name     string
 		tagStr   string
@@ -124,32 +124,32 @@ func TestTagParser_ParseTag_BasicTags(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := parser.ParseTag(tt.tagStr, tt.lineNum)
-			
+
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ParseTag() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			
+
 			if result == nil {
 				t.Fatal("ParseTag() returned nil result")
 			}
-			
+
 			if result.Name != tt.expected.Name {
 				t.Errorf("ParseTag().Name = %v, want %v", result.Name, tt.expected.Name)
 			}
-			
+
 			if result.Line != tt.expected.Line {
 				t.Errorf("ParseTag().Line = %v, want %v", result.Line, tt.expected.Line)
 			}
-			
+
 			if result.Value != tt.expected.Value {
 				t.Errorf("ParseTag().Value = %v, want %v", result.Value, tt.expected.Value)
 			}
-			
+
 			if len(result.Parameters) != len(tt.expected.Parameters) {
 				t.Errorf("ParseTag().Parameters length = %v, want %v", len(result.Parameters), len(tt.expected.Parameters))
 			}
-			
+
 			for key, expectedValue := range tt.expected.Parameters {
 				if actualValue, exists := result.Parameters[key]; !exists {
 					t.Errorf("ParseTag().Parameters missing key %v", key)
@@ -163,7 +163,7 @@ func TestTagParser_ParseTag_BasicTags(t *testing.T) {
 
 func TestTagParser_ParseTag_QuotedStrings(t *testing.T) {
 	parser := NewTagParser("false")
-	
+
 	tests := []struct {
 		name     string
 		tagStr   string
@@ -260,20 +260,20 @@ func TestTagParser_ParseTag_QuotedStrings(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := parser.ParseTag(tt.tagStr, tt.lineNum)
-			
+
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ParseTag() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			
+
 			if result == nil {
 				t.Fatal("ParseTag() returned nil result")
 			}
-			
+
 			if result.Name != tt.expected.Name {
 				t.Errorf("ParseTag().Name = %v, want %v", result.Name, tt.expected.Name)
 			}
-			
+
 			for key, expectedValue := range tt.expected.Parameters {
 				if actualValue, exists := result.Parameters[key]; !exists {
 					t.Errorf("ParseTag().Parameters missing key %v", key)
@@ -287,7 +287,7 @@ func TestTagParser_ParseTag_QuotedStrings(t *testing.T) {
 
 func TestTagParser_ParseTag_NestedBrackets(t *testing.T) {
 	parser := NewTagParser("false")
-	
+
 	tests := []struct {
 		name     string
 		tagStr   string
@@ -343,20 +343,20 @@ func TestTagParser_ParseTag_NestedBrackets(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := parser.ParseTag(tt.tagStr, tt.lineNum)
-			
+
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ParseTag() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			
+
 			if result == nil {
 				t.Fatal("ParseTag() returned nil result")
 			}
-			
+
 			if result.Name != tt.expected.Name {
 				t.Errorf("ParseTag().Name = %v, want %v", result.Name, tt.expected.Name)
 			}
-			
+
 			for key, expectedValue := range tt.expected.Parameters {
 				if actualValue, exists := result.Parameters[key]; !exists {
 					t.Errorf("ParseTag().Parameters missing key %v", key)
@@ -399,16 +399,16 @@ func TestTagParser_ParseTag_KeepSpaceInParameterValue(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			parser := NewTagParser(tt.keepSpaceConfig)
 			result, err := parser.ParseTag(tt.tagStr, 1)
-			
+
 			if err != nil {
 				t.Errorf("ParseTag() error = %v", err)
 				return
 			}
-			
+
 			if result == nil {
 				t.Fatal("ParseTag() returned nil result")
 			}
-			
+
 			if actualValue, exists := result.Parameters["value"]; !exists {
 				t.Error("ParseTag().Parameters missing 'value' key")
 			} else if actualValue != tt.expected {
@@ -420,7 +420,7 @@ func TestTagParser_ParseTag_KeepSpaceInParameterValue(t *testing.T) {
 
 func TestTagParser_ParseTag_MalformedTags(t *testing.T) {
 	parser := NewTagParser("false")
-	
+
 	tests := []struct {
 		name    string
 		tagStr  string
@@ -468,12 +468,12 @@ func TestTagParser_ParseTag_MalformedTags(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := parser.ParseTag(tt.tagStr, tt.lineNum)
-			
+
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ParseTag() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			
+
 			if !tt.wantErr && result == nil {
 				t.Error("ParseTag() returned nil result when expecting success")
 			}
@@ -483,7 +483,7 @@ func TestTagParser_ParseTag_MalformedTags(t *testing.T) {
 
 func TestTagParser_extractParameters(t *testing.T) {
 	parser := NewTagParser("false")
-	
+
 	tests := []struct {
 		name     string
 		paramStr string
@@ -538,16 +538,16 @@ func TestTagParser_extractParameters(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := parser.extractParameters(tt.paramStr)
-			
+
 			if (err != nil) != tt.wantErr {
 				t.Errorf("extractParameters() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			
+
 			if len(result) != len(tt.expected) {
 				t.Errorf("extractParameters() length = %v, want %v", len(result), len(tt.expected))
 			}
-			
+
 			for key, expectedValue := range tt.expected {
 				if actualValue, exists := result[key]; !exists {
 					t.Errorf("extractParameters() missing key %v", key)
@@ -615,7 +615,7 @@ func TestTagParser_handleQuotedValue(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			parser := NewTagParser(tt.keepSpaceConfig)
 			result := parser.handleQuotedValue(tt.value, tt.quote)
-			
+
 			if result != tt.expected {
 				t.Errorf("handleQuotedValue() = %q, want %q", result, tt.expected)
 			}

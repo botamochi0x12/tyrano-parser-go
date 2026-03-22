@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/tyranoscript/tyrano-parser-go/parser"
-	"github.com/tyranoscript/tyrano-parser-go/types"
+	"github.com/botamochi0x12/tyrano-parser-go/parser"
+	"github.com/botamochi0x12/tyrano-parser-go/types"
 )
 
 func main() {
@@ -28,7 +28,7 @@ Hello, world![p]
 		log.Fatalf("Error parsing scenario: %v", err)
 	}
 
-	fmt.Printf("Parsed scenario with %d elements and %d labels\n", 
+	fmt.Printf("Parsed scenario with %d elements and %d labels\n",
 		len(scenario.Elements), len(scenario.Labels))
 
 	// Example config content

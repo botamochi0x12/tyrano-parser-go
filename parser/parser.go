@@ -1,6 +1,6 @@
 package parser
 
-import "github.com/tyranoscript/tyrano-parser-go/types"
+import "github.com/botamochi0x12/tyrano-parser-go/types"
 
 // Parser defines the main interface for parsing TyranoScript files
 type Parser interface {
@@ -44,11 +44,11 @@ func NewDefaultTyranoParser() *TyranoParser {
 // In strict mode, returns error on first error. In lenient mode, collects warnings.
 func (tp *TyranoParser) ParseScenario(content string) (*types.ParsedScenario, error) {
 	scenario, result := tp.ParseScenarioWithResult(content)
-	
+
 	if tp.options.StrictMode && result.HasErrors() {
 		return nil, result
 	}
-	
+
 	return scenario, nil
 }
 
@@ -56,11 +56,11 @@ func (tp *TyranoParser) ParseScenario(content string) (*types.ParsedScenario, er
 // In strict mode, returns error on first error. In lenient mode, collects warnings.
 func (tp *TyranoParser) ParseConfig(content string) (types.ConfigMap, error) {
 	config, result := tp.ParseConfigWithResult(content)
-	
+
 	if tp.options.StrictMode && result.HasErrors() {
 		return nil, result
 	}
-	
+
 	return config, nil
 }
 

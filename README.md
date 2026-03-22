@@ -44,19 +44,19 @@ tyrano-parser-go/
 package main
 
 import (
-    "github.com/tyranoscript/tyrano-parser-go/parser"
+    "github.com/botamochi0x12/tyrano-parser-go/parser"
 )
 
 func main() {
     // Create parser with default options
     tyranoParser := parser.NewDefaultTyranoParser()
-    
+
     // Parse scenario file
     scenario, err := tyranoParser.ParseScenario(scenarioContent)
     if err != nil {
         // Handle error
     }
-    
+
     // Parse config file
     config, err := tyranoParser.ParseConfig(configContent)
     if err != nil {
