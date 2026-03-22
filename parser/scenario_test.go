@@ -68,7 +68,7 @@ func TestScenarioParser_parseCharacterLine(t *testing.T) {
 			sp := NewScenarioParser()
 			sp.currentLine = 1
 			
-			result := sp.parseCharacterLine(tt.input)
+			result := sp.parseCharacterLine(tt.input, tt.input)
 			
 			if result == nil {
 				t.Fatal("parseCharacterLine() returned nil")
@@ -155,7 +155,7 @@ func TestScenarioParser_parseLabelLine(t *testing.T) {
 			sp := NewScenarioParser()
 			sp.currentLine = 1
 			
-			tag, label := sp.parseLabelLine(tt.input)
+			tag, label := sp.parseLabelLine(tt.input, tt.input)
 			
 			if tag == nil {
 				t.Fatal("parseLabelLine() returned nil tag")
@@ -245,7 +245,7 @@ func TestScenarioParser_parseTextLine(t *testing.T) {
 			sp := NewScenarioParser()
 			sp.currentLine = 1
 			
-			result := sp.parseTextLine(tt.input)
+			result := sp.parseTextLine(tt.input, tt.input)
 			
 			if len(result) != len(tt.expected) {
 				t.Errorf("parseTextLine() returned %d tags, want %d", len(result), len(tt.expected))

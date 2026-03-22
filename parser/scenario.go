@@ -13,20 +13,56 @@ type ScenarioParser struct {
 	deepIf       int
 	currentLine  int
 	tagParser    *TagParser
+	options      ParserOptions
+	result       *types.ParseResult
+	labelMap     map[string]bool // Track labels to detect duplicates
 }
 
-// NewScenarioParser creates a new ScenarioParser
+// NewScenarioParser creates a new ScenarioParser with default options
 func NewScenarioParser() *ScenarioParser {
 	return &ScenarioParser{
 		flagScript:  false,
 		deepIf:      0,
 		currentLine: 1,
 		tagParser:   NewTagParser("false"),
+		options: ParserOptions{
+			KeepSpaceInParameterValue: "false",
+			StrictMode:               false,
+			EnableWarnings:          true,
+		},
+		result:   types.NewParseResult(),
+		labelMap: make(map[string]bool),
+	}
+}
+
+// NewScenarioParserWithOptions creates a new ScenarioParser with specified options
+func NewScenarioParserWithOptions(options ParserOptions) *ScenarioParser {
+	return &ScenarioParser{
+		flagScript:  false,
+		deepIf:      0,
+		currentLine: 1,
+		tagParser:   NewTagParser(options.KeepSpaceInParameterValue),
+		options:     options,
+		result:      types.NewParseResult(),
+		labelMap:    make(map[string]bool),
 	}
 }
 
 // Parse parses scenario content and returns a ParsedScenario
 func (sp *ScenarioParser) Parse(content string) (*types.ParsedScenario, error) {
+	scenario, result := sp.ParseWithResult(content)
+	
+	if sp.options.StrictMode && result.HasErrors() {
+		return nil, result
+	}
+	
+	return scenario, nil
+}
+
+// ParseWithResult parses scenario content and returns both the ParsedScenario and ParseResult
+func (sp *ScenarioParser) ParseWithResult(content string) (*types.ParsedScenario, *types.ParseResult) {
+	sp.result = types.NewParseResult()
+	sp.labelMap = make(map[string]bool)
 	scenario := types.NewParsedScenario()
 	sp.lexer = NewLexer(content)
 	sp.currentLine = 1
@@ -114,7 +150,7 @@ func (sp *ScenarioParser) Parse(content string) (*types.ParsedScenario, error) {
 		// Handle different line types
 		if strings.HasPrefix(line, "*") {
 			// Label line
-			tag, labelInfo := sp.parseLabelLine(line)
+			tag, labelInfo := sp.parseLabelLine(line, originalLine)
 			if tag != nil {
 				tag.Line = sp.currentLine
 				scenario.Elements = append(scenario.Elements, *tag)
@@ -126,21 +162,36 @@ func (sp *ScenarioParser) Parse(content string) (*types.ParsedScenario, error) {
 				}
 				elementIndex++
 			}
+			
+			// In strict mode, stop on first error
+			if sp.options.StrictMode && sp.result.HasErrors() {
+				break
+			}
 		} else if strings.HasPrefix(line, "#") {
 			// Character line
-			tag := sp.parseCharacterLine(line)
+			tag := sp.parseCharacterLine(line, originalLine)
 			if tag != nil {
 				tag.Line = sp.currentLine
 				scenario.Elements = append(scenario.Elements, *tag)
 				elementIndex++
 			}
+			
+			// In strict mode, stop on first error
+			if sp.options.StrictMode && sp.result.HasErrors() {
+				break
+			}
 		} else if strings.Contains(line, "[") && strings.Contains(line, "]") {
 			// Line with tags (mixed content)
-			tags := sp.parseTextLine(line)
+			tags := sp.parseTextLine(line, originalLine)
 			for _, tag := range tags {
 				tag.Line = sp.currentLine
 				scenario.Elements = append(scenario.Elements, *tag)
 				elementIndex++
+			}
+			
+			// In strict mode, stop on first error
+			if sp.options.StrictMode && sp.result.HasErrors() {
+				break
 			}
 		} else {
 			// Plain text line
@@ -153,16 +204,27 @@ func (sp *ScenarioParser) Parse(content string) (*types.ParsedScenario, error) {
 		}
 	}
 	
-	return scenario, nil
+	// Check for unmatched script blocks
+	if inScriptBlock {
+		sp.result.AddError(types.UnmatchedIfError, sp.currentLine, 1, "unmatched [iscript] block - missing [endscript]")
+	}
+	
+	// Check for unmatched block comments
+	if inBlockComment {
+		sp.result.AddError(types.SyntaxError, sp.currentLine, 1, "unmatched block comment - missing */")
+	}
+	
+	return scenario, sp.result
 }
 
 // parseCharacterLine parses a character line (#character:expression)
-func (sp *ScenarioParser) parseCharacterLine(line string) *types.ParsedTag {
+func (sp *ScenarioParser) parseCharacterLine(line, originalLine string) *types.ParsedTag {
 	// Remove the # prefix
 	content := strings.TrimPrefix(line, "#")
 	content = strings.TrimSpace(content)
 	
 	if content == "" {
+		sp.result.AddErrorWithContext(types.SyntaxError, sp.currentLine, 1, "empty character name", originalLine)
 		return nil
 	}
 	
@@ -176,6 +238,12 @@ func (sp *ScenarioParser) parseCharacterLine(line string) *types.ParsedTag {
 		expression = strings.TrimSpace(parts[1])
 	}
 	
+	// Validate character name
+	if characterName == "" {
+		sp.result.AddErrorWithContext(types.SyntaxError, sp.currentLine, 1, "empty character name", originalLine)
+		return nil
+	}
+	
 	// Create chara_ptext tag
 	tag := types.NewParsedTag("chara_ptext", sp.currentLine)
 	tag.Parameters["name"] = characterName
@@ -185,12 +253,13 @@ func (sp *ScenarioParser) parseCharacterLine(line string) *types.ParsedTag {
 }
 
 // parseLabelLine parses a label line (*label|description)
-func (sp *ScenarioParser) parseLabelLine(line string) (*types.ParsedTag, *types.LabelInfo) {
+func (sp *ScenarioParser) parseLabelLine(line, originalLine string) (*types.ParsedTag, *types.LabelInfo) {
 	// Remove the * prefix
 	content := strings.TrimPrefix(line, "*")
 	content = strings.TrimSpace(content)
 	
 	if content == "" {
+		sp.result.AddErrorWithContext(types.SyntaxError, sp.currentLine, 1, "empty label name", originalLine)
 		return nil, nil
 	}
 	
@@ -203,6 +272,21 @@ func (sp *ScenarioParser) parseLabelLine(line string) (*types.ParsedTag, *types.
 	if len(parts) > 1 {
 		description = strings.TrimSpace(parts[1])
 	}
+	
+	// Validate label name
+	if labelName == "" {
+		sp.result.AddErrorWithContext(types.SyntaxError, sp.currentLine, 1, "empty label name", originalLine)
+		return nil, nil
+	}
+	
+	// Check for duplicate labels
+	if sp.labelMap[labelName] {
+		sp.result.AddErrorWithContext(types.DuplicateLabelError, sp.currentLine, 1, "duplicate label '"+labelName+"'", originalLine)
+		return nil, nil
+	}
+	
+	// Mark label as seen
+	sp.labelMap[labelName] = true
 	
 	// Create label tag
 	tag := types.NewParsedTag("label", sp.currentLine)
@@ -276,7 +360,7 @@ func (sp *ScenarioParser) parseTagLine(line string) []*types.ParsedTag {
 }
 
 // parseTextLine parses a text line with mixed content (text and tags)
-func (sp *ScenarioParser) parseTextLine(line string) []*types.ParsedTag {
+func (sp *ScenarioParser) parseTextLine(line, originalLine string) []*types.ParsedTag {
 	var tags []*types.ParsedTag
 	
 	if line == "" {
@@ -338,10 +422,19 @@ func (sp *ScenarioParser) parseTextLine(line string) []*types.ParsedTag {
 				i++
 			}
 			
+			// Check for unmatched brackets
+			if bracketDepth > 0 {
+				sp.result.AddErrorWithContext(types.SyntaxError, sp.currentLine, tagStart+1, "unmatched opening bracket in tag", originalLine)
+				continue
+			}
+			
 			// Extract and parse tag
 			tagStr := string(runes[tagStart:i])
 			if parsedTag, err := sp.tagParser.ParseTag(tagStr, sp.currentLine); err == nil {
 				tags = append(tags, parsedTag)
+			} else {
+				// Add parsing error to result
+				sp.result.AddErrorWithContext(types.MalformedTagError, sp.currentLine, tagStart+1, err.Error(), originalLine)
 			}
 		}
 	}

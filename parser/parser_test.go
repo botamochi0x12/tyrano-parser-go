@@ -1,7 +1,10 @@
 package parser
 
 import (
+	"strings"
 	"testing"
+	
+	"github.com/tyranoscript/tyrano-parser-go/types"
 )
 
 func TestNewTyranoParser(t *testing.T) {
@@ -136,7 +139,7 @@ func TestTyranoParser_ParseConfig_BasicFunctionality(t *testing.T) {
 		},
 		{
 			name:    "basic config content",
-			content: "title=\"My Game\";\nwidth=1280;\nheight=720;",
+			content: ";title=\"My Game\";\n;width=1280;\n;height=720;",
 			wantErr: false,
 		},
 	}
@@ -155,6 +158,138 @@ func TestTyranoParser_ParseConfig_BasicFunctionality(t *testing.T) {
 				return
 			}
 		})
+	}
+}
+
+func TestTyranoParser_StrictMode(t *testing.T) {
+	strictParser := NewTyranoParser(ParserOptions{
+		StrictMode:     true,
+		EnableWarnings: true,
+	})
+	
+	lenientParser := NewTyranoParser(ParserOptions{
+		StrictMode:     false,
+		EnableWarnings: true,
+	})
+	
+	// Test scenario with errors
+	invalidScenario := "*\n#\n[invalid_tag"
+	
+	// Strict mode should return error
+	_, err := strictParser.ParseScenario(invalidScenario)
+	if err == nil {
+		t.Error("Strict mode should return error for invalid scenario")
+	}
+	
+	// Lenient mode should not return error but collect issues
+	scenario, err := lenientParser.ParseScenario(invalidScenario)
+	if err != nil {
+		t.Errorf("Lenient mode should not return error: %v", err)
+	}
+	if scenario == nil {
+		t.Error("Lenient mode should return scenario even with issues")
+	}
+	
+	// Test config with errors
+	invalidConfig := ";title=;\n;width=invalid"
+	
+	// Strict mode should return error
+	_, err = strictParser.ParseConfig(invalidConfig)
+	if err == nil {
+		t.Error("Strict mode should return error for invalid config")
+	}
+	
+	// Lenient mode should not return error
+	config, err := lenientParser.ParseConfig(invalidConfig)
+	if err != nil {
+		t.Errorf("Lenient mode should not return error: %v", err)
+	}
+	if config == nil {
+		t.Error("Lenient mode should return config even with issues")
+	}
+}
+
+func TestTyranoParser_WithResult_Methods(t *testing.T) {
+	parser := NewDefaultTyranoParser()
+	
+	// Test ParseScenarioWithResult
+	scenario, result := parser.ParseScenarioWithResult("*start\n#akane\nHello![p]\n[s]")
+	
+	if scenario == nil {
+		t.Error("ParseScenarioWithResult() returned nil scenario")
+	}
+	if result == nil {
+		t.Error("ParseScenarioWithResult() returned nil result")
+	}
+	if result.HasErrors() {
+		t.Errorf("Valid scenario should not have errors: %s", result.Summary())
+	}
+	
+	// Test ParseConfigWithResult
+	config, result := parser.ParseConfigWithResult(";title=\"Test\";\n;width=800;")
+	
+	if config == nil {
+		t.Error("ParseConfigWithResult() returned nil config")
+	}
+	if result == nil {
+		t.Error("ParseConfigWithResult() returned nil result")
+	}
+	if result.HasErrors() {
+		t.Errorf("Valid config should not have errors: %s", result.Summary())
+	}
+}
+
+func TestTyranoParser_ErrorCollection(t *testing.T) {
+	parser := NewDefaultTyranoParser()
+	
+	// Test scenario with multiple issues
+	invalidScenario := "*\n*start\n*start\n#\n[invalid_tag"
+	
+	scenario, result := parser.ParseScenarioWithResult(invalidScenario)
+	
+	if scenario == nil {
+		t.Error("ParseScenarioWithResult() returned nil scenario")
+	}
+	if result == nil {
+		t.Error("ParseScenarioWithResult() returned nil result")
+	}
+	
+	if !result.HasErrors() {
+		t.Error("Invalid scenario should have errors")
+	}
+	
+	errors := result.GetErrors()
+	if len(errors) == 0 {
+		t.Error("Should have collected multiple errors")
+	}
+	
+	// Check for specific error types
+	hasEmptyLabelError := false
+	hasDuplicateLabelError := false
+	hasEmptyCharacterError := false
+	
+	for _, err := range errors {
+		switch err.Type {
+		case types.SyntaxError:
+			if strings.Contains(err.Message, "empty label") {
+				hasEmptyLabelError = true
+			}
+			if strings.Contains(err.Message, "empty character") {
+				hasEmptyCharacterError = true
+			}
+		case types.DuplicateLabelError:
+			hasDuplicateLabelError = true
+		}
+	}
+	
+	if !hasEmptyLabelError {
+		t.Error("Should have detected empty label error")
+	}
+	if !hasDuplicateLabelError {
+		t.Error("Should have detected duplicate label error")
+	}
+	if !hasEmptyCharacterError {
+		t.Error("Should have detected empty character error")
 	}
 }
 

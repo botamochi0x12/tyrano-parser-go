@@ -27,8 +27,8 @@ func TestNewConfigParser(t *testing.T) {
 				t.Fatal("NewConfigParser() returned nil")
 			}
 			
-			if parser.strictMode != tt.strictMode {
-				t.Errorf("NewConfigParser().strictMode = %v, want %v", parser.strictMode, tt.strictMode)
+			if parser.options.StrictMode != tt.strictMode {
+				t.Errorf("NewConfigParser().options.StrictMode = %v, want %v", parser.options.StrictMode, tt.strictMode)
 			}
 		})
 	}

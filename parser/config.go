@@ -9,18 +9,43 @@ import (
 
 // ConfigParser handles parsing of Config.tjs files
 type ConfigParser struct {
-	strictMode bool
+	options ParserOptions
+	result  *types.ParseResult
 }
 
-// NewConfigParser creates a new ConfigParser
+// NewConfigParser creates a new ConfigParser with default options
 func NewConfigParser(strictMode bool) *ConfigParser {
 	return &ConfigParser{
-		strictMode: strictMode,
+		options: ParserOptions{
+			StrictMode:     strictMode,
+			EnableWarnings: true,
+		},
+		result: types.NewParseResult(),
+	}
+}
+
+// NewConfigParserWithOptions creates a new ConfigParser with specified options
+func NewConfigParserWithOptions(options ParserOptions) *ConfigParser {
+	return &ConfigParser{
+		options: options,
+		result:  types.NewParseResult(),
 	}
 }
 
 // Parse parses Config.tjs content and returns a ConfigMap
 func (cp *ConfigParser) Parse(content string) (types.ConfigMap, error) {
+	config, result := cp.ParseWithResult(content)
+	
+	if cp.options.StrictMode && result.HasErrors() {
+		return nil, result
+	}
+	
+	return config, nil
+}
+
+// ParseWithResult parses Config.tjs content and returns both the ConfigMap and ParseResult
+func (cp *ConfigParser) ParseWithResult(content string) (types.ConfigMap, *types.ParseResult) {
+	cp.result = types.NewParseResult()
 	config := types.NewConfigMap()
 	
 	// Split content into lines for processing
@@ -47,37 +72,40 @@ func (cp *ConfigParser) Parse(content string) (types.ConfigMap, error) {
 		
 		// Process config lines that start with semicolon
 		if strings.HasPrefix(trimmedLine, ";") {
-			err := cp.parseConfigLine(trimmedLine, lineNum+1, config)
-			if err != nil && cp.strictMode {
-				return nil, err
+			cp.parseConfigLine(trimmedLine, lineNum+1, config)
+			
+			// In strict mode, stop on first error
+			if cp.options.StrictMode && cp.result.HasErrors() {
+				break
 			}
-			// In lenient mode, we continue even if there's an error
 		}
 		
 		// Skip any other lines (like regular text, multi-line comments, etc.)
 	}
 	
-	return config, nil
+	return config, cp.result
 }
 
 // parseConfigLine parses a single configuration line
-func (cp *ConfigParser) parseConfigLine(line string, lineNum int, config types.ConfigMap) error {
+func (cp *ConfigParser) parseConfigLine(line string, lineNum int, config types.ConfigMap) {
+	originalLine := line
+	
 	// Remove leading semicolon and trim whitespace
 	line = strings.TrimPrefix(line, ";")
 	line = strings.TrimSpace(line)
 	
 	// Skip empty lines
 	if line == "" {
-		return nil
+		return
 	}
 	
 	// Find the equals sign
 	equalsIndex := strings.Index(line, "=")
 	if equalsIndex == -1 {
-		if cp.strictMode {
-			return types.NewParseError(types.InvalidConfigError, lineNum, 1, "missing equals sign in config line")
-		}
-		return nil
+		issue := types.NewParseError(types.InvalidConfigError, lineNum, 1, "missing equals sign in config line")
+		issue.WithContext(originalLine)
+		cp.result.AddIssue(*issue)
+		return
 	}
 	
 	// Extract key and value
@@ -86,10 +114,10 @@ func (cp *ConfigParser) parseConfigLine(line string, lineNum int, config types.C
 	
 	// Validate key
 	if key == "" {
-		if cp.strictMode {
-			return types.NewParseError(types.InvalidConfigError, lineNum, 1, "empty key in config line")
-		}
-		return nil
+		issue := types.NewParseError(types.InvalidConfigError, lineNum, 1, "empty key in config line")
+		issue.WithContext(originalLine)
+		cp.result.AddIssue(*issue)
+		return
 	}
 	
 	// Remove trailing semicolon if present
@@ -97,27 +125,49 @@ func (cp *ConfigParser) parseConfigLine(line string, lineNum int, config types.C
 	if strings.HasSuffix(value, ";") {
 		value = strings.TrimSuffix(value, ";")
 		value = strings.TrimSpace(value)
-	} else if cp.strictMode {
-		return types.NewParseError(types.InvalidConfigError, lineNum, 1, "missing semicolon at end of config line")
+	} else {
+		// Missing semicolon - this could be a warning in lenient mode
+		severity := types.Error
+		if !cp.options.StrictMode {
+			severity = types.Warning
+		}
+		issue := types.NewParseIssue(types.InvalidConfigError, severity, lineNum, len(line), "missing semicolon at end of config line")
+		issue.WithContext(originalLine)
+		cp.result.AddIssue(*issue)
+		
+		if cp.options.StrictMode {
+			return
+		}
 	}
 	
 	// Validate quoted values
-	if err := cp.validateQuotedValue(value, lineNum); err != nil && cp.strictMode {
-		return err
+	if err := cp.validateQuotedValue(value, lineNum, originalLine); err != nil {
+		cp.result.AddIssue(*err)
+		if cp.options.StrictMode {
+			return
+		}
 	}
 	
 	// Handle quoted values
 	value = cp.handleQuotedValue(value)
 	
 	// Validate that we have a value
-	if value == "" && cp.strictMode {
-		return types.NewParseError(types.InvalidConfigError, lineNum, 1, "empty value in config line")
+	if value == "" {
+		severity := types.Error
+		if !cp.options.StrictMode {
+			severity = types.Warning
+		}
+		issue := types.NewParseIssue(types.InvalidConfigError, severity, lineNum, len(line), "empty value in config line")
+		issue.WithContext(originalLine)
+		cp.result.AddIssue(*issue)
+		
+		if cp.options.StrictMode {
+			return
+		}
 	}
 	
 	// Store the key-value pair
 	config.Set(key, value)
-	
-	return nil
 }
 
 // handleQuotedValue processes quoted and unquoted values
@@ -140,22 +190,30 @@ func (cp *ConfigParser) handleQuotedValue(value string) string {
 }
 
 // validateQuotedValue checks if quotes are properly matched
-func (cp *ConfigParser) validateQuotedValue(value string, lineNum int) error {
+func (cp *ConfigParser) validateQuotedValue(value string, lineNum int, context string) *types.ParseIssue {
 	value = strings.TrimSpace(value)
 	
 	// Check for unmatched quotes
 	if len(value) > 0 {
 		if strings.HasPrefix(value, "\"") && !strings.HasSuffix(value, "\"") {
-			return types.NewParseError(types.InvalidConfigError, lineNum, 1, "unmatched double quote")
+			issue := types.NewParseError(types.InvalidConfigError, lineNum, 1, "unmatched double quote")
+			issue.WithContext(context)
+			return issue
 		}
 		if strings.HasPrefix(value, "'") && !strings.HasSuffix(value, "'") {
-			return types.NewParseError(types.InvalidConfigError, lineNum, 1, "unmatched single quote")
+			issue := types.NewParseError(types.InvalidConfigError, lineNum, 1, "unmatched single quote")
+			issue.WithContext(context)
+			return issue
 		}
 		if !strings.HasPrefix(value, "\"") && strings.HasSuffix(value, "\"") {
-			return types.NewParseError(types.InvalidConfigError, lineNum, 1, "unmatched double quote")
+			issue := types.NewParseError(types.InvalidConfigError, lineNum, 1, "unmatched double quote")
+			issue.WithContext(context)
+			return issue
 		}
 		if !strings.HasPrefix(value, "'") && strings.HasSuffix(value, "'") {
-			return types.NewParseError(types.InvalidConfigError, lineNum, 1, "unmatched single quote")
+			issue := types.NewParseError(types.InvalidConfigError, lineNum, 1, "unmatched single quote")
+			issue.WithContext(context)
+			return issue
 		}
 	}
 	
