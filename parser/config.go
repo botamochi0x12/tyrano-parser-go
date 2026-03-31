@@ -60,27 +60,23 @@ func (cp *ConfigParser) ParseWithResult(content string) (types.ConfigMap, *types
 			continue
 		}
 
-		// Skip JavaScript-style comments (// and /* */)
-		if strings.HasPrefix(trimmedLine, "//") {
+		// Skip comment lines (;) and JavaScript-style comments (//)
+		if strings.HasPrefix(trimmedLine, ";") || strings.HasPrefix(trimmedLine, "//") {
 			continue
 		}
 
-		// Handle block comments (/* ... */) - simple approach for single-line blocks
+		// Skip block comments (/* ... */) - simple approach for single-line blocks
 		if strings.HasPrefix(trimmedLine, "/*") && strings.HasSuffix(trimmedLine, "*/") {
 			continue
 		}
 
-		// Process config lines that start with semicolon
-		if strings.HasPrefix(trimmedLine, ";") {
-			cp.parseConfigLine(trimmedLine, lineNum+1, config)
+		// Process all other lines as potential config assignments (key=value;)
+		cp.parseConfigLine(trimmedLine, lineNum+1, config)
 
-			// In strict mode, stop on first error
-			if cp.options.StrictMode && cp.result.HasErrors() {
-				break
-			}
+		// In strict mode, stop on first error
+		if cp.options.StrictMode && cp.result.HasErrors() {
+			break
 		}
-
-		// Skip any other lines (like regular text, multi-line comments, etc.)
 	}
 
 	return config, cp.result
@@ -89,10 +85,6 @@ func (cp *ConfigParser) ParseWithResult(content string) (types.ConfigMap, *types
 // parseConfigLine parses a single configuration line
 func (cp *ConfigParser) parseConfigLine(line string, lineNum int, config types.ConfigMap) {
 	originalLine := line
-
-	// Remove leading semicolon and trim whitespace
-	line = strings.TrimPrefix(line, ";")
-	line = strings.TrimSpace(line)
 
 	// Skip empty lines
 	if line == "" {
