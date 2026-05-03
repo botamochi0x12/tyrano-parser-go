@@ -49,17 +49,21 @@ Global flags:
   --quiet                Suppress warnings (errors still emitted).
 ```
 
+Examples below use the linked official TyranoScript sample project. Its `data/`
+directory is available at `tyranoscript/data/`, so the project root passed to
+`--project-root` is `tyranoscript`.
+
 Examples:
 
 ```bash
-go run ./cmd/tyrano-parser scenario StarGazers/data/scenario/first.ks
-go run ./cmd/tyrano-parser scenario StarGazers/data/scenario/first.ks --format report
+go run ./cmd/tyrano-parser scenario tyranoscript/data/scenario/first.ks
+go run ./cmd/tyrano-parser scenario tyranoscript/data/scenario/first.ks --format report
 
-go run ./cmd/tyrano-parser config --project-root StarGazers
-go run ./cmd/tyrano-parser config StarGazers/data/system/Config.tjs --format report
+go run ./cmd/tyrano-parser config --project-root tyranoscript
+go run ./cmd/tyrano-parser config tyranoscript/data/system/Config.tjs --format report
 
-go run ./cmd/tyrano-parser scan --project-root StarGazers
-go run ./cmd/tyrano-parser scan --project-root StarGazers first.ks --format report
+go run ./cmd/tyrano-parser scan --project-root tyranoscript
+go run ./cmd/tyrano-parser scan --project-root tyranoscript first.ks --format report
 ```
 
 Exit codes:
@@ -92,7 +96,7 @@ Exit codes:
   "kind": "config",
   "path": "data/system/Config.tjs",
   "config": {
-    "System.title": "StarGazers",
+    "System.title": "ティラノスクリプト",
     "scWidth": "1280"
   },
   "issues": []
@@ -174,7 +178,7 @@ Real TyranoScript configs use a leading semicolon as the assignment marker:
 
 ```tjs
 // comment
-;System.title = "StarGazers";
+;System.title = "My Game";
 ;scWidth = 1280
 ;userFace = Quicksand, "Yu Gothic", sans-serif; // inline comment
 ;url = "http://example.com/path";
