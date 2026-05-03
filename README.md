@@ -1,88 +1,239 @@
-# TyranoScript Parser - Go Implementation
+# TyranoScript Parser for Go
 
-A Go implementation of the TyranoScript KAG parser for parsing scenario files (.ks format) and configuration files (Config.tjs).
+Go parser and CLI for TyranoScript projects. It can parse individual `.ks`
+scenario files, real-format `Config.tjs` files, and full TyranoScript project
+trees with basic `@call` / `@jump` / `[link]` cross-reference checks.
 
-## Project Structure
+The parser layer is pure string-in / struct-out. File I/O and project discovery
+live in `loader/`, and the command-line interface lives in `cmd/tyrano-parser/`.
 
+## Features
+
+- Parse TyranoScript `.ks` files into KAG-compatible JSON-shaped structs.
+- Parse real TyranoScript `Config.tjs` assignments such as `;key = value;`.
+- Strip `//` inline comments from config values without breaking quoted URLs.
+- Load and scan TyranoScript project layouts under `data/scenario/` and
+  `data/system/Config.tjs`.
+- Extract references from `@call`, `@jump`, and `[link]` tags.
+- Report missing referenced `.ks` files and missing labels for static refs.
+- Skip dynamic runtime refs such as `storage=&tf.storage`.
+- Emit JSON or human-readable reports from the CLI.
+
+## Install / Build
+
+```bash
+go build ./cmd/tyrano-parser
 ```
-tyrano-parser-go/
-├── go.mod                 # Go module definition
-├── main.go               # Example usage and demonstration
-├── README.md             # This file
-├── parser/               # Parser implementation package
-│   ├── parser.go         # Main parser interface and TyranoParser
-│   ├── scenario.go       # Scenario file parsing logic
-│   ├── config.go         # Config.tjs parsing logic
-│   ├── tag.go           # Tag parsing and parameter extraction
-│   └── lexer.go         # Low-level tokenization
-└── types/               # Data structures and types
-    ├── scenario.go      # Scenario-related data structures
-    ├── config.go        # Configuration data structures
-    └── errors.go        # Custom error types
+
+This creates a local `tyrano-parser` binary in the current directory. To run
+without keeping a binary:
+
+```bash
+go run ./cmd/tyrano-parser --help
 ```
 
-## Core Components
+## CLI Usage
 
-### Types Package
-- **ParsedScenario**: Represents a parsed scenario with elements and labels
-- **ParsedTag**: Represents individual parsed tags with parameters
-- **LabelInfo**: Contains information about scenario labels
-- **ConfigMap**: Key-value pairs from configuration files
-- **ParseError**: Custom error type with detailed context
+```text
+tyrano-parser <command> [flags] [args]
 
-### Parser Package
-- **Parser Interface**: Main parsing interface
-- **TyranoParser**: Main parser implementation
-- **ScenarioParser**: Handles .ks file parsing
-- **ConfigParser**: Handles Config.tjs file parsing
-- **TagParser**: Specialized tag and parameter parsing
-- **Lexer**: Low-level tokenization
+Commands:
+  scenario <file.ks>           Parse one scenario file.
+  config   [<Config.tjs>]      Parse one config file (default: auto-discover).
+  scan     [<entrypoint.ks>]   Scan project (default: walk all scenarios).
 
-## Usage
+Global flags:
+  --project-root <dir>   Skip auto-discovery, use this as project root.
+  --format json|report   Output format (default: json).
+  --strict               Strict mode: any parse issue exits non-zero.
+  --quiet                Suppress warnings (errors still emitted).
+```
+
+Examples:
+
+```bash
+go run ./cmd/tyrano-parser scenario StarGazers/data/scenario/first.ks
+go run ./cmd/tyrano-parser scenario StarGazers/data/scenario/first.ks --format report
+
+go run ./cmd/tyrano-parser config --project-root StarGazers
+go run ./cmd/tyrano-parser config StarGazers/data/system/Config.tjs --format report
+
+go run ./cmd/tyrano-parser scan --project-root StarGazers
+go run ./cmd/tyrano-parser scan --project-root StarGazers first.ks --format report
+```
+
+Exit codes:
+
+- `0`: success, no parse errors
+- `1`: parse errors, or any issue when `--strict` is set
+- `2`: I/O or project discovery error
+- `3`: usage error
+
+## JSON Output
+
+`scenario` emits:
+
+```json
+{
+  "kind": "scenario",
+  "path": "data/scenario/first.ks",
+  "scenario": {
+    "array_s": [],
+    "map_label": {}
+  },
+  "issues": []
+}
+```
+
+`config` emits:
+
+```json
+{
+  "kind": "config",
+  "path": "data/system/Config.tjs",
+  "config": {
+    "System.title": "StarGazers",
+    "scWidth": "1280"
+  },
+  "issues": []
+}
+```
+
+`scan` emits:
+
+```json
+{
+  "kind": "project_scan",
+  "root": "/path/to/project",
+  "config": {},
+  "scenarios": {},
+  "refs": [],
+  "issues": []
+}
+```
+
+## Go API
+
+### Pure Parsers
+
+```go
+package main
+
+import "github.com/botamochi0x12/tyrano-parser-go/parser"
+
+func parseStrings(scenarioContent, configContent string) error {
+    p := parser.NewDefaultTyranoParser()
+
+    scenario, scenarioResult := p.ParseScenarioWithResult(scenarioContent)
+    _ = scenario
+    if scenarioResult.HasErrors() {
+        return scenarioResult
+    }
+
+    config, configResult := p.ParseConfigWithResult(configContent)
+    _ = config
+    if configResult.HasErrors() {
+        return configResult
+    }
+
+    return nil
+}
+```
+
+### Loader / Project Scans
 
 ```go
 package main
 
 import (
+    "github.com/botamochi0x12/tyrano-parser-go/loader"
     "github.com/botamochi0x12/tyrano-parser-go/parser"
 )
 
-func main() {
-    // Create parser with default options
-    tyranoParser := parser.NewDefaultTyranoParser()
-
-    // Parse scenario file
-    scenario, err := tyranoParser.ParseScenario(scenarioContent)
+func scanProject(root string) error {
+    layout, err := loader.LayoutFrom(root)
     if err != nil {
-        // Handle error
+        return err
     }
 
-    // Parse config file
-    config, err := tyranoParser.ParseConfig(configContent)
+    scan, err := loader.ScanProject(layout, parser.NewDefaultTyranoParser())
     if err != nil {
-        // Handle error
+        return err
     }
+
+    if scan.Issues.HasErrors() {
+        return scan.Issues
+    }
+    return nil
 }
 ```
 
-## Development Status
+## Config.tjs Support
 
-This is the foundation implementation with core data structures and interfaces defined. The actual parsing logic will be implemented in subsequent development phases following Test-Driven Development (TDD) methodology.
+Real TyranoScript configs use a leading semicolon as the assignment marker:
 
-## Requirements
-
-- Go 1.25.2 or later
-- Compatible with KAG3/Kirikiri syntax
-- Maintains compatibility with original JavaScript parser output format
-
-## Building
-
-```bash
-go build -v
+```tjs
+// comment
+;System.title = "StarGazers";
+;scWidth = 1280
+;userFace = Quicksand, "Yu Gothic", sans-serif; // inline comment
+;url = "http://example.com/path";
 ```
 
-## Running
+Supported behavior:
+
+- leading `;` assignment prefix
+- optional trailing `;`
+- dotted keys
+- quoted and unquoted values
+- quote-aware `//` inline comment stripping
+- raw string preservation for expressions such as `960-32`
+
+Full TJS evaluation and legacy non-UTF-8 encodings are out of scope.
+
+## Project Layout
+
+The loader expects a standard TyranoScript layout:
+
+```text
+project/
+└── data/
+    ├── scenario/
+    │   ├── first.ks
+    │   └── title.ks
+    └── system/
+        └── Config.tjs
+```
+
+`loader.DiscoverRoot` walks upward from a starting directory until it finds
+`data/scenario/` or `data/system/Config.tjs`. `loader.LayoutFrom` uses an
+explicit project root and requires `data/scenario/`.
+
+## Repository Structure
+
+```text
+cmd/tyrano-parser/          CLI entry point and output renderers
+cmd/tyrano-parser-example/  Programmatic usage example
+loader/                     File I/O, project discovery, refs, scans
+parser/                     Pure TyranoScript and Config.tjs parsers
+types/                      JSON/wire structs and parse issue types
+docs/superpowers/           Design and implementation planning docs
+```
+
+## Development
+
+Run the full verification suite:
 
 ```bash
-go run main.go
+go test -race ./...
+go test -cover ./...
+go vet ./...
+```
+
+Current coverage target is at least 80% per package.
+
+Run the example:
+
+```bash
+go run ./cmd/tyrano-parser-example
 ```
