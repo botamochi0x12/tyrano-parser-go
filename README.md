@@ -226,9 +226,16 @@ docs/superpowers/           Design and implementation planning docs
 
 ## Development
 
-Run the full verification suite:
+Run the same verification suite used by CI:
 
 ```bash
+go run ./tools/ci
+```
+
+The local CI helper runs:
+
+```bash
+go test ./...
 go test -race ./...
 go test -cover ./...
 go vet ./...
@@ -236,8 +243,26 @@ go vet ./...
 
 Current coverage target is at least 80% per package.
 
+Build local release artifacts into `dist/`:
+
+```bash
+go run ./tools/release-snapshot
+```
+
 Run the example:
 
 ```bash
 go run ./cmd/tyrano-parser-example
+```
+
+## Releases
+
+Version tags matching `v*` publish CLI artifacts through GitHub Actions. The
+release workflow runs `go run ./tools/ci`, builds the release snapshot, and
+uploads the files from `dist/` plus `dist/checksums.txt` to the GitHub Release.
+
+For local release verification without publishing:
+
+```bash
+go run ./tools/release-snapshot
 ```
