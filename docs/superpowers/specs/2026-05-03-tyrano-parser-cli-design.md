@@ -4,6 +4,10 @@
 **Status:** Approved (pre-implementation)
 **Author:** botamochi0x12
 
+**Fixture note:** This design doc references `StarGazers` as a project-specific
+real-world fixture used during implementation. User-facing README examples use
+the linked official TyranoScript sample project at `tyranoscript/data/`.
+
 ## Background
 
 `tyrano-parser-go` currently exposes two pure parsers (`parser.ScenarioParser` for `.ks`, `parser.ConfigParser` for `Config.tjs`) consumed by an example `main.go`. Two gaps block real use:
