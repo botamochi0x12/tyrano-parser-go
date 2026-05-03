@@ -92,11 +92,14 @@ func (tp *TagParser) extractParameters(paramStr string) (map[string]string, erro
 			i++
 		}
 
-		if i >= len(runes) || runes[i] != '=' {
-			return nil, fmt.Errorf("invalid parameter format: expected '=' after parameter name")
-		}
-
 		paramName := string(runes[nameStart:i])
+		for i < len(runes) && unicode.IsSpace(runes[i]) {
+			i++
+		}
+		if i >= len(runes) || runes[i] != '=' {
+			params[paramName] = ""
+			continue
+		}
 		i++ // Skip '='
 
 		// Skip whitespace after '='

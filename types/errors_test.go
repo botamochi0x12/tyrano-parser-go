@@ -6,34 +6,34 @@ import (
 
 func TestErrorType_String(t *testing.T) {
 	tests := []struct {
-		name     string
+		name      string
 		errorType ErrorType
-		expected string
+		expected  string
 	}{
 		{
-			name:     "SyntaxError",
+			name:      "SyntaxError",
 			errorType: SyntaxError,
-			expected: "SyntaxError",
+			expected:  "SyntaxError",
 		},
 		{
-			name:     "DuplicateLabelError",
+			name:      "DuplicateLabelError",
 			errorType: DuplicateLabelError,
-			expected: "DuplicateLabelError",
+			expected:  "DuplicateLabelError",
 		},
 		{
-			name:     "UnmatchedIfError",
+			name:      "UnmatchedIfError",
 			errorType: UnmatchedIfError,
-			expected: "UnmatchedIfError",
+			expected:  "UnmatchedIfError",
 		},
 		{
-			name:     "InvalidConfigError",
+			name:      "InvalidConfigError",
 			errorType: InvalidConfigError,
-			expected: "InvalidConfigError",
+			expected:  "InvalidConfigError",
 		},
 		{
-			name:     "UnknownError",
+			name:      "UnknownError",
 			errorType: ErrorType(999),
-			expected: "UnknownError",
+			expected:  "UnknownError",
 		},
 	}
 
@@ -74,7 +74,7 @@ func TestNewParseError(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := NewParseError(tt.errorType, tt.line, tt.column, tt.message)
-			
+
 			if err.Type != tt.errorType {
 				t.Errorf("NewParseError().Type = %v, want %v", err.Type, tt.errorType)
 			}
@@ -171,7 +171,7 @@ func TestParseIssue_Error(t *testing.T) {
 
 func TestParseResult_ErrorHandling(t *testing.T) {
 	result := NewParseResult()
-	
+
 	// Test empty result
 	if result.HasErrors() {
 		t.Error("NewParseResult() should not have errors initially")
@@ -182,10 +182,10 @@ func TestParseResult_ErrorHandling(t *testing.T) {
 	if result.HasIssues() {
 		t.Error("NewParseResult() should not have issues initially")
 	}
-	
+
 	// Add an error
 	result.AddError(SyntaxError, 10, 5, "Test error")
-	
+
 	if !result.HasErrors() {
 		t.Error("ParseResult should have errors after adding error")
 	}
@@ -195,10 +195,10 @@ func TestParseResult_ErrorHandling(t *testing.T) {
 	if !result.HasIssues() {
 		t.Error("ParseResult should have issues after adding error")
 	}
-	
+
 	// Add a warning
 	result.AddWarning(InvalidConfigError, 15, 3, "Test warning")
-	
+
 	if !result.HasErrors() {
 		t.Error("ParseResult should still have errors")
 	}
@@ -208,7 +208,7 @@ func TestParseResult_ErrorHandling(t *testing.T) {
 	if !result.HasIssues() {
 		t.Error("ParseResult should have issues after adding warning")
 	}
-	
+
 	// Test counts
 	if result.GetErrorCount() != 1 {
 		t.Errorf("ParseResult.GetErrorCount() = %d, want 1", result.GetErrorCount())
@@ -223,14 +223,14 @@ func TestParseResult_ErrorHandling(t *testing.T) {
 
 func TestParseResult_WithContext(t *testing.T) {
 	result := NewParseResult()
-	
+
 	result.AddErrorWithContext(SyntaxError, 10, 5, "Test error", "*invalid_label")
-	
+
 	errors := result.GetErrors()
 	if len(errors) != 1 {
 		t.Fatalf("Expected 1 error, got %d", len(errors))
 	}
-	
+
 	if errors[0].Context != "*invalid_label" {
 		t.Errorf("Expected context '*invalid_label', got '%s'", errors[0].Context)
 	}
@@ -239,12 +239,12 @@ func TestParseResult_WithContext(t *testing.T) {
 func TestParseResult_Merge(t *testing.T) {
 	result1 := NewParseResult()
 	result1.AddError(SyntaxError, 10, 5, "Error 1")
-	
+
 	result2 := NewParseResult()
 	result2.AddWarning(InvalidConfigError, 15, 3, "Warning 1")
-	
+
 	result1.Merge(result2)
-	
+
 	if result1.GetErrorCount() != 1 {
 		t.Errorf("Expected 1 error after merge, got %d", result1.GetErrorCount())
 	}
@@ -296,11 +296,23 @@ func TestParseResult_Summary(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := NewParseResult()
 			tt.setup(result)
-			
+
 			summary := result.Summary()
 			if summary != tt.expected {
 				t.Errorf("ParseResult.Summary() = %v, want %v", summary, tt.expected)
 			}
 		})
+	}
+}
+
+func TestErrorType_NewConstants(t *testing.T) {
+	if MissingStorageError.String() != "MissingStorageError" {
+		t.Errorf("MissingStorageError.String() = %q", MissingStorageError.String())
+	}
+	if MissingLabelError.String() != "MissingLabelError" {
+		t.Errorf("MissingLabelError.String() = %q", MissingLabelError.String())
+	}
+	if MissingStorageError == MissingLabelError {
+		t.Error("constants must be distinct")
 	}
 }

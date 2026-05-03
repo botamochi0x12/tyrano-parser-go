@@ -1,8 +1,8 @@
 package parser
 
 import (
-	"testing"
 	"github.com/botamochi0x12/tyrano-parser-go/types"
+	"testing"
 )
 
 func TestNewTagParser(t *testing.T) {
@@ -62,8 +62,8 @@ func TestTagParser_ParseTag_BasicTags(t *testing.T) {
 			tagStr:  "[bg storage=\"room.jpg\"]",
 			lineNum: 2,
 			expected: &types.ParsedTag{
-				Name:       "bg",
-				Line:       2,
+				Name: "bg",
+				Line: 2,
 				Parameters: map[string]string{
 					"storage": "room.jpg",
 				},
@@ -76,8 +76,8 @@ func TestTagParser_ParseTag_BasicTags(t *testing.T) {
 			tagStr:  "[chara_show name=\"akane\" left=\"300\" time=\"1000\"]",
 			lineNum: 3,
 			expected: &types.ParsedTag{
-				Name:       "chara_show",
-				Line:       3,
+				Name: "chara_show",
+				Line: 3,
 				Parameters: map[string]string{
 					"name": "akane",
 					"left": "300",
@@ -92,8 +92,8 @@ func TestTagParser_ParseTag_BasicTags(t *testing.T) {
 			tagStr:  "[jump storage=scene1.ks target=*start]",
 			lineNum: 4,
 			expected: &types.ParsedTag{
-				Name:       "jump",
-				Line:       4,
+				Name: "jump",
+				Line: 4,
 				Parameters: map[string]string{
 					"storage": "scene1.ks",
 					"target":  "*start",
@@ -107,8 +107,8 @@ func TestTagParser_ParseTag_BasicTags(t *testing.T) {
 			tagStr:  "[button name=\"save_btn\" graphic=\"save.png\" x=100 y=200]",
 			lineNum: 5,
 			expected: &types.ParsedTag{
-				Name:       "button",
-				Line:       5,
+				Name: "button",
+				Line: 5,
 				Parameters: map[string]string{
 					"name":    "save_btn",
 					"graphic": "save.png",
@@ -176,8 +176,8 @@ func TestTagParser_ParseTag_QuotedStrings(t *testing.T) {
 			tagStr:  "[text value=\"Hello world!\"]",
 			lineNum: 1,
 			expected: &types.ParsedTag{
-				Name:       "text",
-				Line:       1,
+				Name: "text",
+				Line: 1,
 				Parameters: map[string]string{
 					"value": "Hello world!",
 				},
@@ -190,8 +190,8 @@ func TestTagParser_ParseTag_QuotedStrings(t *testing.T) {
 			tagStr:  "[text value='Hello world!']",
 			lineNum: 1,
 			expected: &types.ParsedTag{
-				Name:       "text",
-				Line:       1,
+				Name: "text",
+				Line: 1,
 				Parameters: map[string]string{
 					"value": "Hello world!",
 				},
@@ -204,8 +204,8 @@ func TestTagParser_ParseTag_QuotedStrings(t *testing.T) {
 			tagStr:  "[text value=\"Hello\\nworld\\t!\"]",
 			lineNum: 1,
 			expected: &types.ParsedTag{
-				Name:       "text",
-				Line:       1,
+				Name: "text",
+				Line: 1,
 				Parameters: map[string]string{
 					"value": "Hello\nworld\t!",
 				},
@@ -218,8 +218,8 @@ func TestTagParser_ParseTag_QuotedStrings(t *testing.T) {
 			tagStr:  "[text value=\"Say \\\"Hello\\\" to the world\"]",
 			lineNum: 1,
 			expected: &types.ParsedTag{
-				Name:       "text",
-				Line:       1,
+				Name: "text",
+				Line: 1,
 				Parameters: map[string]string{
 					"value": "Say \"Hello\" to the world",
 				},
@@ -232,8 +232,8 @@ func TestTagParser_ParseTag_QuotedStrings(t *testing.T) {
 			tagStr:  "[text value=\"こんにちは世界！\"]",
 			lineNum: 1,
 			expected: &types.ParsedTag{
-				Name:       "text",
-				Line:       1,
+				Name: "text",
+				Line: 1,
 				Parameters: map[string]string{
 					"value": "こんにちは世界！",
 				},
@@ -246,8 +246,8 @@ func TestTagParser_ParseTag_QuotedStrings(t *testing.T) {
 			tagStr:  "[text value=\"\"]",
 			lineNum: 1,
 			expected: &types.ParsedTag{
-				Name:       "text",
-				Line:       1,
+				Name: "text",
+				Line: 1,
 				Parameters: map[string]string{
 					"value": "",
 				},
@@ -300,8 +300,8 @@ func TestTagParser_ParseTag_NestedBrackets(t *testing.T) {
 			tagStr:  "[eval exp=\"f.test = [1,2,3]\"]",
 			lineNum: 1,
 			expected: &types.ParsedTag{
-				Name:       "eval",
-				Line:       1,
+				Name: "eval",
+				Line: 1,
 				Parameters: map[string]string{
 					"exp": "f.test = [1,2,3]",
 				},
@@ -314,8 +314,8 @@ func TestTagParser_ParseTag_NestedBrackets(t *testing.T) {
 			tagStr:  "[eval exp=\"f.data = {items: [1, 2, {nested: [3, 4]}]}\"]",
 			lineNum: 1,
 			expected: &types.ParsedTag{
-				Name:       "eval",
-				Line:       1,
+				Name: "eval",
+				Line: 1,
 				Parameters: map[string]string{
 					"exp": "f.data = {items: [1, 2, {nested: [3, 4]}]}",
 				},
@@ -328,8 +328,8 @@ func TestTagParser_ParseTag_NestedBrackets(t *testing.T) {
 			tagStr:  "[eval exp1=\"arr1 = [1,2]\" exp2=\"arr2 = [3,4]\"]",
 			lineNum: 1,
 			expected: &types.ParsedTag{
-				Name:       "eval",
-				Line:       1,
+				Name: "eval",
+				Line: 1,
 				Parameters: map[string]string{
 					"exp1": "arr1 = [1,2]",
 					"exp2": "arr2 = [3,4]",
@@ -620,5 +620,33 @@ func TestTagParser_handleQuotedValue(t *testing.T) {
 				t.Errorf("handleQuotedValue() = %q, want %q", result, tt.expected)
 			}
 		})
+	}
+}
+
+func TestTagParser_extractParameters_WhitespaceAroundEquals(t *testing.T) {
+	tp := NewTagParser("false")
+	params, err := tp.extractParameters(`target = "*common" storage = title.ks`)
+	if err != nil {
+		t.Fatalf("extractParameters returned error: %v", err)
+	}
+	if params["target"] != "*common" {
+		t.Errorf("target = %q, want *common", params["target"])
+	}
+	if params["storage"] != "title.ks" {
+		t.Errorf("storage = %q, want title.ks", params["storage"])
+	}
+}
+
+func TestTagParser_extractParameters_BareFlagParameter(t *testing.T) {
+	tp := NewTagParser("false")
+	params, err := tp.extractParameters(`* text=&tf.savetext`)
+	if err != nil {
+		t.Fatalf("extractParameters returned error: %v", err)
+	}
+	if _, ok := params["*"]; !ok {
+		t.Errorf("missing bare * parameter: %#v", params)
+	}
+	if params["text"] != "&tf.savetext" {
+		t.Errorf("text = %q, want &tf.savetext", params["text"])
 	}
 }

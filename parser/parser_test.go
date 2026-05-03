@@ -10,8 +10,8 @@ import (
 func TestNewTyranoParser(t *testing.T) {
 	options := ParserOptions{
 		KeepSpaceInParameterValue: "true",
-		StrictMode:               true,
-		EnableWarnings:          false,
+		StrictMode:                true,
+		EnableWarnings:            false,
 	}
 
 	parser := NewTyranoParser(options)
@@ -243,7 +243,7 @@ func TestTyranoParser_ErrorCollection(t *testing.T) {
 	parser := NewDefaultTyranoParser()
 
 	// Test scenario with multiple issues
-	invalidScenario := "*\n*start\n*start\n#\n[invalid_tag"
+	invalidScenario := "*\n*start\n*start\n[invalid_tag"
 
 	scenario, result := parser.ParseScenarioWithResult(invalidScenario)
 
@@ -266,16 +266,12 @@ func TestTyranoParser_ErrorCollection(t *testing.T) {
 	// Check for specific error types
 	hasEmptyLabelError := false
 	hasDuplicateLabelError := false
-	hasEmptyCharacterError := false
 
 	for _, err := range errors {
 		switch err.Type {
 		case types.SyntaxError:
 			if strings.Contains(err.Message, "empty label") {
 				hasEmptyLabelError = true
-			}
-			if strings.Contains(err.Message, "empty character") {
-				hasEmptyCharacterError = true
 			}
 		case types.DuplicateLabelError:
 			hasDuplicateLabelError = true
@@ -288,16 +284,13 @@ func TestTyranoParser_ErrorCollection(t *testing.T) {
 	if !hasDuplicateLabelError {
 		t.Error("Should have detected duplicate label error")
 	}
-	if !hasEmptyCharacterError {
-		t.Error("Should have detected empty character error")
-	}
 }
 
 func TestParserOptions_StructValidation(t *testing.T) {
 	options := ParserOptions{
 		KeepSpaceInParameterValue: "custom",
-		StrictMode:               true,
-		EnableWarnings:          false,
+		StrictMode:                true,
+		EnableWarnings:            false,
 	}
 
 	if options.KeepSpaceInParameterValue != "custom" {

@@ -14,6 +14,8 @@ const (
 	UnknownTagError
 	MissingParameterError
 	InvalidParameterError
+	MissingStorageError
+	MissingLabelError
 )
 
 // String returns the string representation of the error type
@@ -35,6 +37,10 @@ func (e ErrorType) String() string {
 		return "MissingParameterError"
 	case InvalidParameterError:
 		return "InvalidParameterError"
+	case MissingStorageError:
+		return "MissingStorageError"
+	case MissingLabelError:
+		return "MissingLabelError"
 	default:
 		return "UnknownError"
 	}
@@ -270,10 +276,10 @@ func (pr *ParseResult) Summary() string {
 	if !pr.HasIssues() {
 		return "No issues found"
 	}
-	
+
 	errorCount := pr.GetErrorCount()
 	warningCount := pr.GetWarningCount()
-	
+
 	if errorCount > 0 && warningCount > 0 {
 		return fmt.Sprintf("Found %d error(s) and %d warning(s)", errorCount, warningCount)
 	} else if errorCount > 0 {

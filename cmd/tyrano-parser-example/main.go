@@ -1,3 +1,5 @@
+// Command tyrano-parser-example demonstrates programmatic use of the
+// parser package. The actual CLI is cmd/tyrano-parser.
 package main
 
 import (
@@ -19,10 +21,7 @@ func prettyPrint(v any) {
 }
 
 func main() {
-	// Create a new parser with default options
 	tyranoParser := parser.NewDefaultTyranoParser()
-
-	// Example scenario content
 	scenarioContent := `
 ;コメント
 *start
@@ -31,34 +30,26 @@ func main() {
 Hello, world![p]
 [s]
 `
-
-	// Parse scenario
 	scenario, err := tyranoParser.ParseScenario(scenarioContent)
 	if err != nil {
 		log.Fatalf("-- Error parsing scenario: %v", err)
 	}
-
 	fmt.Println("## Parsed scenario:")
 	prettyPrint(scenario)
 
-	// Example config content
 	configContent := `
-;Configuration file
-title="My Game";
-width=1280;
-height=720;
+// Configuration file
+;title = "My Game";
+;width = 1280;
+;height = 720
 `
-
-	// Parse config
 	config, err := tyranoParser.ParseConfig(configContent)
 	if err != nil {
 		log.Fatalf("-- Error parsing config: %v", err)
 	}
-
 	fmt.Println("## Parsed config:")
 	prettyPrint(config)
 
-	// Demonstrate error types
 	parseErr := types.NewParseError(types.SyntaxError, 10, 5, "Invalid tag syntax")
 	fmt.Println("## Example error:")
 	prettyPrint(parseErr)

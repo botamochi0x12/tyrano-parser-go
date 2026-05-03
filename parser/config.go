@@ -43,96 +43,83 @@ func (cp *ConfigParser) Parse(content string) (types.ConfigMap, error) {
 	return config, nil
 }
 
-// ParseWithResult parses Config.tjs content and returns both the ConfigMap and ParseResult
+// ParseWithResult parses Config.tjs content and returns both the ConfigMap and ParseResult.
+// Real-format grammar:
+//
+//	;key = value;       (semicolon prefix marks an assignment; trailing ; optional)
+//	;key = value; // c  (inline // comment after value, quote-aware)
+//	// pure comment
+//	/* block */         (single-line only)
+//	<other lines>       (TJS code outside our subset; ignored unless looks like assignment)
 func (cp *ConfigParser) ParseWithResult(content string) (types.ConfigMap, *types.ParseResult) {
 	cp.result = types.NewParseResult()
 	config := types.NewConfigMap()
 
-	// Split content into lines for processing
-	lines := strings.Split(content, "\n")
-
-	for lineNum, line := range lines {
-		// Trim whitespace
-		trimmedLine := strings.TrimSpace(line)
-
-		// Skip empty lines
-		if trimmedLine == "" {
+	for lineNum, raw := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(raw)
+		if trimmed == "" {
 			continue
 		}
-
-		// Skip comment lines (;) and JavaScript-style comments (//)
-		if strings.HasPrefix(trimmedLine, ";") || strings.HasPrefix(trimmedLine, "//") {
+		if strings.HasPrefix(trimmed, "//") {
 			continue
 		}
-
-		// Skip block comments (/* ... */) - simple approach for single-line blocks
-		if strings.HasPrefix(trimmedLine, "/*") && strings.HasSuffix(trimmedLine, "*/") {
+		if strings.HasPrefix(trimmed, "/*") && strings.HasSuffix(trimmed, "*/") {
 			continue
 		}
-
-		// Process all other lines as potential config assignments (key=value;)
-		cp.parseConfigLine(trimmedLine, lineNum+1, config)
-
-		// In strict mode, stop on first error
-		if cp.options.StrictMode && cp.result.HasErrors() {
-			break
+		if strings.HasPrefix(trimmed, ";") {
+			cp.parseConfigLine(strings.TrimSpace(trimmed[1:]), lineNum+1, config)
+			if cp.options.StrictMode && cp.result.HasErrors() {
+				break
+			}
+			continue
+		}
+		if strings.Contains(trimmed, "=") {
+			issue := types.NewParseWarning(types.InvalidConfigError, lineNum+1, 1,
+				"unrecognized assignment form (missing leading ';' prefix)")
+			issue.WithContext(trimmed)
+			cp.result.AddIssue(*issue)
 		}
 	}
 
 	return config, cp.result
 }
 
-// parseConfigLine parses a single configuration line
+// parseConfigLine parses a config assignment after the leading ";" has been stripped.
+// Handles inline comments, optional trailing semicolon, quoted values.
 func (cp *ConfigParser) parseConfigLine(line string, lineNum int, config types.ConfigMap) {
 	originalLine := line
-
-	// Skip empty lines
 	if line == "" {
 		return
 	}
 
-	// Find the equals sign
+	line = strings.TrimSpace(stripInlineComment(line))
+	if line == "" {
+		return
+	}
+
+	line = strings.TrimSuffix(line, ";")
+	line = strings.TrimSpace(line)
+
 	equalsIndex := strings.Index(line, "=")
 	if equalsIndex == -1 {
-		issue := types.NewParseError(types.InvalidConfigError, lineNum, 1, "missing equals sign in config line")
+		issue := types.NewParseError(types.InvalidConfigError, lineNum, 1,
+			"missing equals sign in config line")
 		issue.WithContext(originalLine)
 		cp.result.AddIssue(*issue)
 		return
 	}
 
-	// Extract key and value
 	key := strings.TrimSpace(line[:equalsIndex])
-	valueWithSemicolon := strings.TrimSpace(line[equalsIndex+1:])
+	value := strings.TrimSpace(line[equalsIndex+1:])
 
-	// Validate key
 	if key == "" {
-		issue := types.NewParseError(types.InvalidConfigError, lineNum, 1, "empty key in config line")
+		issue := types.NewParseError(types.InvalidConfigError, lineNum, 1,
+			"empty key in config line")
 		issue.WithContext(originalLine)
 		cp.result.AddIssue(*issue)
 		return
 	}
 
-	// Remove trailing semicolon if present
-	value := valueWithSemicolon
-	if strings.HasSuffix(value, ";") {
-		value = strings.TrimSuffix(value, ";")
-		value = strings.TrimSpace(value)
-	} else {
-		// Missing semicolon - this could be a warning in lenient mode
-		severity := types.Error
-		if !cp.options.StrictMode {
-			severity = types.Warning
-		}
-		issue := types.NewParseIssue(types.InvalidConfigError, severity, lineNum, len(line), "missing semicolon at end of config line")
-		issue.WithContext(originalLine)
-		cp.result.AddIssue(*issue)
-
-		if cp.options.StrictMode {
-			return
-		}
-	}
-
-	// Validate quoted values
 	if err := cp.validateQuotedValue(value, lineNum, originalLine); err != nil {
 		cp.result.AddIssue(*err)
 		if cp.options.StrictMode {
@@ -140,25 +127,22 @@ func (cp *ConfigParser) parseConfigLine(line string, lineNum int, config types.C
 		}
 	}
 
-	// Handle quoted values
 	value = cp.handleQuotedValue(value)
 
-	// Validate that we have a value
 	if value == "" {
 		severity := types.Error
 		if !cp.options.StrictMode {
 			severity = types.Warning
 		}
-		issue := types.NewParseIssue(types.InvalidConfigError, severity, lineNum, len(line), "empty value in config line")
+		issue := types.NewParseIssue(types.InvalidConfigError, severity, lineNum,
+			len(originalLine), "empty value in config line")
 		issue.WithContext(originalLine)
 		cp.result.AddIssue(*issue)
-
 		if cp.options.StrictMode {
 			return
 		}
 	}
 
-	// Store the key-value pair
 	config.Set(key, value)
 }
 
@@ -248,6 +232,37 @@ func (cp *ConfigParser) processEscapeSequences(s string) string {
 	}
 
 	return result.String()
+}
+
+// stripInlineComment removes a trailing "// ..." comment from the value side
+// of a config line, respecting quoted regions. Backslash-escapes are honored
+// inside quotes. Returns the input unchanged if no unquoted "//" exists.
+func stripInlineComment(s string) string {
+	inSingle := false
+	inDouble := false
+	i := 0
+	for i < len(s) {
+		c := s[i]
+		if c == '\\' && i+1 < len(s) && (inSingle || inDouble) {
+			i += 2
+			continue
+		}
+		if c == '"' && !inSingle {
+			inDouble = !inDouble
+			i++
+			continue
+		}
+		if c == '\'' && !inDouble {
+			inSingle = !inSingle
+			i++
+			continue
+		}
+		if !inSingle && !inDouble && c == '/' && i+1 < len(s) && s[i+1] == '/' {
+			return strings.TrimRight(s[:i], " \t")
+		}
+		i++
+	}
+	return s
 }
 
 // isWhitespace checks if a rune is whitespace

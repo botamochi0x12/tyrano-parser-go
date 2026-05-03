@@ -8,14 +8,14 @@ import (
 
 // ScenarioParser handles parsing of scenario files
 type ScenarioParser struct {
-	lexer        *Lexer
-	flagScript   bool
-	deepIf       int
-	currentLine  int
-	tagParser    *TagParser
-	options      ParserOptions
-	result       *types.ParseResult
-	labelMap     map[string]bool // Track labels to detect duplicates
+	lexer       *Lexer
+	flagScript  bool
+	deepIf      int
+	currentLine int
+	tagParser   *TagParser
+	options     ParserOptions
+	result      *types.ParseResult
+	labelMap    map[string]bool // Track labels to detect duplicates
 }
 
 // NewScenarioParser creates a new ScenarioParser with default options
@@ -27,8 +27,8 @@ func NewScenarioParser() *ScenarioParser {
 		tagParser:   NewTagParser("false"),
 		options: ParserOptions{
 			KeepSpaceInParameterValue: "false",
-			StrictMode:               false,
-			EnableWarnings:          true,
+			StrictMode:                false,
+			EnableWarnings:            true,
 		},
 		result:   types.NewParseResult(),
 		labelMap: make(map[string]bool),
@@ -180,6 +180,18 @@ func (sp *ScenarioParser) ParseWithResult(content string) (*types.ParsedScenario
 			if sp.options.StrictMode && sp.result.HasErrors() {
 				break
 			}
+		} else if strings.HasPrefix(line, "@") {
+			// Command line shorthand: @jump storage="title.ks"
+			tag := sp.parseCommandLine(line, originalLine)
+			if tag != nil {
+				tag.Line = sp.currentLine
+				scenario.Elements = append(scenario.Elements, *tag)
+				elementIndex++
+			}
+
+			if sp.options.StrictMode && sp.result.HasErrors() {
+				break
+			}
 		} else if strings.Contains(line, "[") && strings.Contains(line, "]") {
 			// Line with tags (mixed content)
 			tags := sp.parseTextLine(line, originalLine)
@@ -224,8 +236,10 @@ func (sp *ScenarioParser) parseCharacterLine(line, originalLine string) *types.P
 	content = strings.TrimSpace(content)
 
 	if content == "" {
-		sp.result.AddErrorWithContext(types.SyntaxError, sp.currentLine, 1, "empty character name", originalLine)
-		return nil
+		tag := types.NewParsedTag("chara_ptext", sp.currentLine)
+		tag.Parameters["name"] = ""
+		tag.Parameters["face"] = ""
+		return tag
 	}
 
 	// Split by colon to separate character name and expression
@@ -249,6 +263,21 @@ func (sp *ScenarioParser) parseCharacterLine(line, originalLine string) *types.P
 	tag.Parameters["name"] = characterName
 	tag.Parameters["face"] = expression
 
+	return tag
+}
+
+// parseCommandLine parses TyranoScript @tag shorthand as an ordinary tag.
+func (sp *ScenarioParser) parseCommandLine(line, originalLine string) *types.ParsedTag {
+	content := strings.TrimSpace(strings.TrimPrefix(line, "@"))
+	if content == "" {
+		sp.result.AddErrorWithContext(types.SyntaxError, sp.currentLine, 1, "empty command tag", originalLine)
+		return nil
+	}
+	tag, err := sp.tagParser.ParseTag("["+content+"]", sp.currentLine)
+	if err != nil {
+		sp.result.AddErrorWithContext(types.MalformedTagError, sp.currentLine, 1, err.Error(), originalLine)
+		return nil
+	}
 	return tag
 }
 
@@ -441,7 +470,6 @@ func (sp *ScenarioParser) parseTextLine(line, originalLine string) []*types.Pars
 
 	return tags
 }
-
 
 // parseComment checks if a line is a comment and should be ignored
 func (sp *ScenarioParser) parseComment(line string) bool {

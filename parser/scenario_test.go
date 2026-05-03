@@ -50,6 +50,18 @@ func TestScenarioParser_parseCharacterLine(t *testing.T) {
 			},
 		},
 		{
+			name:  "empty character clears name",
+			input: "#",
+			expected: &types.ParsedTag{
+				Name: "chara_ptext",
+				Parameters: map[string]string{
+					"name": "",
+					"face": "",
+				},
+				Value: "",
+			},
+		},
+		{
 			name:  "character with empty expression",
 			input: "#akane:",
 			expected: &types.ParsedTag{
@@ -86,6 +98,41 @@ func TestScenarioParser_parseCharacterLine(t *testing.T) {
 				t.Errorf("parseCharacterLine().Parameters[face] = %v, want %v", result.Parameters["face"], tt.expected.Parameters["face"])
 			}
 		})
+	}
+}
+
+func TestScenarioParser_parseCommandLine(t *testing.T) {
+	sp := NewScenarioParser()
+	sp.currentLine = 1
+	tag := sp.parseCommandLine(`@jump storage="title.ks" target="*start"`, `@jump storage="title.ks" target="*start"`)
+	if tag == nil {
+		t.Fatal("expected parsed command tag")
+	}
+	if tag.Name != "jump" {
+		t.Errorf("Name = %q, want jump", tag.Name)
+	}
+	if tag.Parameters["storage"] != "title.ks" {
+		t.Errorf("storage = %q, want title.ks", tag.Parameters["storage"])
+	}
+	if tag.Parameters["target"] != "*start" {
+		t.Errorf("target = %q, want *start", tag.Parameters["target"])
+	}
+}
+
+func TestScenarioParser_Parse_CommandLines(t *testing.T) {
+	sp := NewScenarioParser()
+	scenario, result := sp.ParseWithResult("*start\n@call storage=\"tyrano.ks\"\n[s]\n")
+	if result.HasErrors() {
+		t.Fatalf("unexpected errors: %v", result.GetErrors())
+	}
+	if len(scenario.Elements) < 2 {
+		t.Fatalf("expected command tag in elements, got %#v", scenario.Elements)
+	}
+	if scenario.Elements[1].Name != "call" {
+		t.Errorf("second element = %q, want call", scenario.Elements[1].Name)
+	}
+	if scenario.Elements[1].Parameters["storage"] != "tyrano.ks" {
+		t.Errorf("storage = %q, want tyrano.ks", scenario.Elements[1].Parameters["storage"])
 	}
 }
 
@@ -234,8 +281,8 @@ func TestScenarioParser_parseTextLine(t *testing.T) {
 			},
 		},
 		{
-			name:  "empty text",
-			input: "",
+			name:     "empty text",
+			input:    "",
 			expected: []*types.ParsedTag{},
 		},
 	}
