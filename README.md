@@ -21,20 +21,20 @@ live in `loader/`, and the command-line interface lives in `cmd/tyrano-parser/`.
 
 ## Install / Build
 
-```bash
+```console
 go build ./cmd/tyrano-parser
 ```
 
 This creates a local `tyrano-parser` binary in the current directory. To run
 without keeping a binary:
 
-```bash
+```console
 go run ./cmd/tyrano-parser --help
 ```
 
 ## CLI Usage
 
-```text
+```man
 tyrano-parser <command> [flags] [args]
 
 Commands:
@@ -55,7 +55,7 @@ directory is available at `tyranoscript/data/`, so the project root passed to
 
 Examples:
 
-```bash
+```console
 go run ./cmd/tyrano-parser scenario tyranoscript/data/scenario/first.ks
 go run ./cmd/tyrano-parser scenario tyranoscript/data/scenario/first.ks --format report
 
@@ -228,13 +228,13 @@ docs/superpowers/           Design and implementation planning docs
 
 Run the same verification suite used by CI:
 
-```bash
+```console
 go run ./tools/ci
 ```
 
 The local CI helper runs:
 
-```bash
+```console
 go test ./...
 go test -race ./...
 go test -cover ./...
@@ -245,13 +245,13 @@ Current coverage target is at least 80% per package.
 
 Build local release artifacts into `dist/`:
 
-```bash
+```console
 go run ./tools/release-snapshot
 ```
 
 Run the example:
 
-```bash
+```console
 go run ./cmd/tyrano-parser-example
 ```
 
@@ -263,6 +263,6 @@ uploads the files from `dist/` plus `dist/checksums.txt` to the GitHub Release.
 
 For local release verification without publishing:
 
-```bash
+```console
 go run ./tools/release-snapshot
 ```
