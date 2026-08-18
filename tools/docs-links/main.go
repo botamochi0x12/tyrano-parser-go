@@ -29,7 +29,7 @@ func brokenLinks(root string) ([]brokenLink, error) {
 			return err
 		}
 		if entry.IsDir() {
-			if entry.Name() == ".git" {
+			if skippedDir(root, path, entry.Name()) {
 				return fs.SkipDir
 			}
 			return nil
@@ -82,6 +82,20 @@ func brokenLinksIn(root, path string) ([]brokenLink, error) {
 		}
 	}
 	return broken, nil
+}
+
+// skippedDir keeps the walk inside this checkout's own documentation. Sibling
+// worktrees under .claude/worktrees/ hold other branches, whose links are that
+// branch's business.
+func skippedDir(root, path, name string) bool {
+	if name == ".git" {
+		return true
+	}
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		return false
+	}
+	return filepath.ToSlash(rel) == ".claude/worktrees"
 }
 
 // isLocalTarget keeps out anything that does not name a file in the repository:

@@ -73,6 +73,15 @@ func TestBrokenLinksIgnoresFencedCodeBlocks(t *testing.T) {
 	}
 }
 
+func TestBrokenLinksIgnoresCheckedOutWorktrees(t *testing.T) {
+	root := t.TempDir()
+	writeDoc(t, root, filepath.Join(".claude", "worktrees", "wip", "README.md"), "[gone](nowhere.md)\n")
+
+	if broken := findBrokenLinks(t, root); len(broken) != 0 {
+		t.Fatalf("brokenLinks() = %#v, want worktree checkouts left to their own branch", broken)
+	}
+}
+
 // TestRepositoryMarkdownLinksResolve guards the documentation set itself, so
 // splitting or moving a page cannot silently strand a link.
 func TestRepositoryMarkdownLinksResolve(t *testing.T) {
