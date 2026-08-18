@@ -204,8 +204,23 @@ func (x *refExtractor) newRef(elements []types.ParsedTag, i int, kind string, e 
 	}, true
 }
 
-// choiceText returns the label a player reads on a branch: the text= parameter
-// when the tag carries one, otherwise the body of a [link] ... [endlink] pair.
+// choiceBodyEnd names the tags that close a link body. A script missing its
+// [endlink] is malformed but common, so the body also stops at anything that
+// plainly belongs to the scene rather than to the choice; without that, one
+// broken link would swallow the narration that follows it.
+var choiceBodyEnd = map[string]bool{
+	"endlink":  true,
+	"endglink": true,
+	"label":    true,
+	"s":        true,
+	"p":        true,
+	"l":        true,
+	"cm":       true,
+	"ct":       true,
+}
+
+// choiceText returns the wording a player reads on a branch: the text=
+// parameter when the tag carries one, otherwise the body of a [link] pair.
 func choiceText(elements []types.ParsedTag, i int) string {
 	if text := elements[i].Parameters["text"]; text != "" {
 		return text
@@ -215,7 +230,7 @@ func choiceText(elements []types.ParsedTag, i int) string {
 	}
 	var body strings.Builder
 	for _, tag := range elements[i+1:] {
-		if tag.Name == "endlink" || tag.Name == "link" {
+		if choiceBodyEnd[tag.Name] || refTags[tag.Name] != "" {
 			break
 		}
 		if tag.Name == "text" {

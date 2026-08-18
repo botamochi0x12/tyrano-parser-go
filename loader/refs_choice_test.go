@@ -102,6 +102,22 @@ func TestExtractRefs_StaticRefIsReportedResolved(t *testing.T) {
 	}
 }
 
+func TestExtractRefs_LinkWithoutEndlinkStopsAtTheNextStop(t *testing.T) {
+	src := "[link storage=\"a.ks\"]森へ行く\n[s]\nこれは選択肢ではない本文。\n"
+	r := soleRef(t, "menu.ks", src)
+	if r.Text != "森へ行く" {
+		t.Errorf("Text = %q, want %q — a missing [endlink] must not swallow the narration", r.Text, "森へ行く")
+	}
+}
+
+func TestExtractRefs_LinkBodyStopsAtTheNextLabel(t *testing.T) {
+	src := "[link target=\"*x\"]戻る\n*x\n別の場面の本文。\n"
+	r := soleRef(t, "menu.ks", src)
+	if r.Text != "戻る" {
+		t.Errorf("Text = %q, want %q", r.Text, "戻る")
+	}
+}
+
 func TestExtractRefs_TextlessRuntimeButtonIsFlaggedUI(t *testing.T) {
 	r := soleRef(t, "config.ks", "[button target=&mp.target]\n")
 	if !r.UI {
