@@ -317,3 +317,8 @@ To produce the same artifacts locally in `dist/`:
 go run ./tools/release-snapshot
 go run ./tools/release-snapshot --version v1.2.3
 ```
+
+## License
+
+Released under the [MIT License](LICENSE). Every release archive ships a copy
+alongside the binary.
