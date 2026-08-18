@@ -48,6 +48,9 @@ verification — are in [Installation](docs/installation.md).
 | [Development](docs/development.md) | Repository structure, verification suite, commit conventions |
 | [Releasing](docs/releasing.md) | Semantic version tags and the release workflow |
 
+Contributors and coding agents should start from [AGENTS.md](AGENTS.md), which
+indexes the same material along with the conventions this repository expects.
+
 ## Development
 
 ```console
