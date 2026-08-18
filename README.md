@@ -15,6 +15,10 @@ live in `loader/`, and the command-line interface lives in `cmd/tyrano-parser/`.
 - Scan a project under `data/scenario/` and `data/system/Config.tjs`.
 - Report missing referenced files and missing labels, while skipping dynamic
   runtime references.
+- Expand `[macro]` calls, so a choice routed through a macro reports the
+  storage, label and on-screen wording the call site binds.
+- Tell a story choice from a system menu button, and say which reference fields
+  are still runtime expressions.
 - Emit JSON or human-readable reports from the CLI.
 
 ## Quick start
