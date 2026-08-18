@@ -14,6 +14,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          # Release notes are generated from the history since the previous tag.
+          fetch-depth: 0
 
       - name: Setup Go
         uses: actions/setup-go@v6
@@ -24,12 +27,44 @@ jobs:
       - name: Run local CI
         run: go run ./tools/ci
 
-      - name: Build release snapshot
-        run: go run ./tools/release-snapshot
+      # Rejects a tag that is not a semantic version, stamps it into the
+      # binaries, and unpacks the linux archive to confirm it runs.
+      - name: Build and verify release archives
+        run: go run ./tools/release-snapshot --version "$GITHUB_REF_NAME"
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v3
         with:
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          body: |
+            ## Install
+
+            Download the archive for your platform, extract it, and put `tyrano-parser` on your PATH.
+
+            ```sh
+            VERSION=${{ github.ref_name }}
+            curl -fsSLO "https://github.com/botamochi0x12/tyrano-parser-go/releases/download/${VERSION}/tyrano-parser_${VERSION}_linux_amd64.tar.gz"
+            tar -xzf "tyrano-parser_${VERSION}_linux_amd64.tar.gz"
+            install -Dm0755 tyrano-parser ~/.local/bin/tyrano-parser
+            tyrano-parser version
+            ```
+
+            Swap `linux_amd64` for `linux_arm64`, `darwin_amd64`, `darwin_arm64`, or `windows_amd64` (a `.zip`).
+
+            Verify a download against `checksums.txt`:
+
+            ```sh
+            sha256sum -c --ignore-missing checksums.txt
+            ```
+
+            Go users can instead run:
+
+            ```sh
+            go install github.com/botamochi0x12/tyrano-parser-go/cmd/tyrano-parser@${{ github.ref_name }}
+            ```
           files: |
-            dist/tyrano-parser_*
+            dist/tyrano-parser_*.tar.gz
+            dist/tyrano-parser_*.zip
             dist/checksums.txt
