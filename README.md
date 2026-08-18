@@ -19,7 +19,38 @@ live in `loader/`, and the command-line interface lives in `cmd/tyrano-parser/`.
 - Skip dynamic runtime refs such as `storage=&tf.storage`.
 - Emit JSON or human-readable reports from the CLI.
 
-## Install / Build
+## Install
+
+### Download a release build
+
+Every `v*` tag publishes prebuilt archives on the
+[Releases page](https://github.com/botamochi0x12/tyrano-parser-go/releases) for
+linux, macOS, and Windows on amd64 and arm64. Download the archive for your
+platform, extract it, and put `tyrano-parser` on your PATH:
+
+```console
+VERSION=v0.1.0
+curl -fsSLO "https://github.com/botamochi0x12/tyrano-parser-go/releases/download/${VERSION}/tyrano-parser_${VERSION}_linux_amd64.tar.gz"
+tar -xzf "tyrano-parser_${VERSION}_linux_amd64.tar.gz"
+install -Dm0755 tyrano-parser ~/.local/bin/tyrano-parser
+tyrano-parser version
+```
+
+Swap `linux_amd64` for `linux_arm64`, `darwin_amd64`, `darwin_arm64`, or
+`windows_amd64` (published as a `.zip`). Each release also ships a
+`checksums.txt`:
+
+```console
+sha256sum -c --ignore-missing checksums.txt
+```
+
+### Install with Go
+
+```console
+go install github.com/botamochi0x12/tyrano-parser-go/cmd/tyrano-parser@latest
+```
+
+### Build from source
 
 ```console
 go build ./cmd/tyrano-parser
@@ -32,6 +63,9 @@ without keeping a binary:
 go run ./cmd/tyrano-parser --help
 ```
 
+Source builds report `dev` from `tyrano-parser version`; released binaries
+report their tag.
+
 ## CLI Usage
 
 ```man
@@ -41,6 +75,7 @@ Commands:
   scenario <file.ks>           Parse one scenario file.
   config   [<Config.tjs>]      Parse one config file (default: auto-discover).
   scan     [<entrypoint.ks>]   Scan project (default: walk all scenarios).
+  version                      Print the tyrano-parser version.
 
 Global flags:
   --project-root <dir>   Skip auto-discovery, use this as project root.
@@ -243,7 +278,7 @@ go vet ./...
 
 Current coverage target is at least 80% per package.
 
-Build local release artifacts into `dist/`:
+Build and verify local release archives in `dist/`:
 
 ```console
 go run ./tools/release-snapshot
@@ -257,12 +292,28 @@ go run ./cmd/tyrano-parser-example
 
 ## Releases
 
-Version tags matching `v*` publish CLI artifacts through GitHub Actions. The
-release workflow runs `go run ./tools/ci`, builds the release snapshot, and
-uploads the files from `dist/` plus `dist/checksums.txt` to the GitHub Release.
+Releases are cut by pushing a [semantic version](https://semver.org/) tag:
 
-For local release verification without publishing:
+```console
+git tag v1.2.3
+git push origin v1.2.3
+```
+
+The tag must match `vMAJOR.MINOR.PATCH` with an optional prerelease or build
+suffix; anything else fails the workflow before a release is published. A tag
+carrying a prerelease suffix such as `v1.2.3-rc.1` is published as a prerelease.
+
+For each tag the release workflow runs `go run ./tools/ci`, builds one archive
+per platform with the tag stamped into the binary, unpacks the linux archive to
+confirm it runs and reports that tag, and uploads the archives plus
+`checksums.txt` to the GitHub Release along with generated release notes.
+
+Every pull request runs the same packaging path as a `dev` snapshot and attaches
+the archives to the CI run, so a broken release is caught before it is tagged.
+
+To produce the same artifacts locally in `dist/`:
 
 ```console
 go run ./tools/release-snapshot
+go run ./tools/release-snapshot --version v1.2.3
 ```
