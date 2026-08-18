@@ -23,6 +23,9 @@ func mainWithArgs(args []string, stdout, stderr *os.File) int {
 		return runConfig(rest)
 	case "scan":
 		return runScan(rest)
+	case "version", "--version", "-version":
+		printVersion(stdout)
+		return 0
 	case "-h", "--help", "help":
 		usage(stdout)
 		return 0
@@ -40,6 +43,7 @@ Commands:
   scenario <file.ks>           Parse one scenario file.
   config   [<Config.tjs>]      Parse one config file (default: auto-discover).
   scan     [<entrypoint.ks>]   Scan project (default: walk all scenarios).
+  version                      Print the tyrano-parser version.
 
 Global flags:
   --project-root <dir>   Skip auto-discovery, use this as project root.
