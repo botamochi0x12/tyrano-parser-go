@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strings"
 
 	"github.com/botamochi0x12/tyrano-parser-go/types"
 )
@@ -58,14 +59,7 @@ func renderScanReport(w io.Writer, out scanOutput) error {
 	}
 	fmt.Fprintf(w, "\nCross-references (%d):\n", len(out.Refs))
 	for _, r := range out.Refs {
-		switch {
-		case r.Storage != "" && r.Target != "":
-			fmt.Fprintf(w, "  %s:%d  @%s storage=%q target=%q\n", r.From, r.Line, r.Tag, r.Storage, r.Target)
-		case r.Storage != "":
-			fmt.Fprintf(w, "  %s:%d  @%s storage=%q\n", r.From, r.Line, r.Tag, r.Storage)
-		default:
-			fmt.Fprintf(w, "  %s:%d  @%s target=%q\n", r.From, r.Line, r.Tag, r.Target)
-		}
+		writeRef(w, r)
 	}
 	if len(out.Issues) > 0 {
 		fmt.Fprintln(w, "\nIssues:")
@@ -83,6 +77,46 @@ func renderScanReport(w io.Writer, out scanOutput) error {
 	}
 	fmt.Fprintf(w, "\nSummary: %d error(s), %d warning(s)\n", errors, warnings)
 	return nil
+}
+
+// writeRef prints one cross-reference. It shows the label without its leading
+// asterisk so the line stays readable when the report is pasted into Markdown,
+// falling back to the raw target while that target is still a runtime
+// expression.
+func writeRef(w io.Writer, r types.ScenarioRefRecord) {
+	parts := []string{fmt.Sprintf("%s:%d", r.From, r.Line)}
+	if kind := refKind(r); kind != "" {
+		parts = append(parts, kind)
+	}
+	parts = append(parts, "@"+r.Tag)
+	if r.Text != "" {
+		parts = append(parts, fmt.Sprintf("%q", r.Text))
+	}
+	if r.Storage != "" {
+		parts = append(parts, fmt.Sprintf("storage=%q", r.Storage))
+	}
+	switch {
+	case r.Label != "":
+		parts = append(parts, fmt.Sprintf("label=%q", r.Label))
+	case r.Target != "":
+		parts = append(parts, fmt.Sprintf("target=%q", r.Target))
+	}
+	if r.Macro != "" {
+		parts = append(parts, fmt.Sprintf("(via %s)", r.Macro))
+	}
+	if len(r.Dynamic) > 0 {
+		parts = append(parts, fmt.Sprintf("(unresolved: %s)", strings.Join(r.Dynamic, ", ")))
+	}
+	fmt.Fprintf(w, "  %s\n", strings.Join(parts, " "))
+}
+
+// refKind names what a reference is for: a system control reads as "ui" rather
+// than as one more story choice.
+func refKind(r types.ScenarioRefRecord) string {
+	if r.UI {
+		return "ui"
+	}
+	return r.Kind
 }
 
 func writeIssue(w io.Writer, i types.ParseIssue) {
