@@ -128,6 +128,35 @@ func main() {
 	}
 }
 
+// buildRelease fills dist with exactly what should be published: one archive
+// per target plus their checksums. The raw binaries are staged inside dist and
+// removed again, so nothing unpublishable is left behind.
+func buildRelease(version string, runner buildRunner) ([]string, error) {
+	stage := filepath.Join(distDir, stageDirName)
+	if err := prepareDist(distDir); err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(stage, 0o755); err != nil {
+		return nil, err
+	}
+
+	built, err := buildArtifacts(stage, releasePlatforms(), runner)
+	if err != nil {
+		return nil, err
+	}
+	archives, err := packageArtifacts(distDir, built, version, releaseDocs())
+	if err != nil {
+		return nil, err
+	}
+	if err := os.RemoveAll(stage); err != nil {
+		return nil, err
+	}
+	if err := writeChecksums(distDir, archives); err != nil {
+		return nil, err
+	}
+	return archives, nil
+}
+
 func run(args []string) error {
 	version, err := resolveVersion(args, os.Getenv)
 	if err != nil {
@@ -135,26 +164,8 @@ func run(args []string) error {
 	}
 	fmt.Printf("==> release version: %s\n", version)
 
-	stage := filepath.Join(distDir, stageDirName)
-	if err := prepareDist(distDir); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(stage, 0o755); err != nil {
-		return err
-	}
-
-	built, err := buildArtifacts(stage, releasePlatforms(), goBuilder(version))
+	archives, err := buildRelease(version, goBuilder(version))
 	if err != nil {
-		return err
-	}
-	archives, err := packageArtifacts(distDir, built, version, releaseDocs())
-	if err != nil {
-		return err
-	}
-	if err := os.RemoveAll(stage); err != nil {
-		return err
-	}
-	if err := writeChecksums(distDir, archives); err != nil {
 		return err
 	}
 
