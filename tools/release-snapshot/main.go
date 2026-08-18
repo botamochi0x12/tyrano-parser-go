@@ -7,15 +7,28 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"sort"
 	"strings"
 )
 
-const distDir = "dist"
+const (
+	distDir = "dist"
+	// stageDirName holds the raw binaries until they are packaged; only the
+	// archives and their checksums are meant to be published.
+	stageDirName = ".stage"
+)
 
 type targetPlatform struct {
 	goos   string
 	goarch string
+}
+
+// builtArtifact is a compiled binary together with the target it was built for.
+type builtArtifact struct {
+	target targetPlatform
+	path   string
 }
 
 type buildRunner func(targetPlatform, string) error
@@ -30,6 +43,12 @@ func releasePlatforms() []targetPlatform {
 	}
 }
 
+// releaseDocs travel inside every archive so a downloaded binary carries its
+// licence and usage notes with it.
+func releaseDocs() []string {
+	return []string{"README.md", "LICENSE"}
+}
+
 func artifactName(target targetPlatform) string {
 	name := fmt.Sprintf("tyrano-parser_%s_%s", target.goos, target.goarch)
 	if target.goos == "windows" {
@@ -38,25 +57,46 @@ func artifactName(target targetPlatform) string {
 	return name
 }
 
-func buildArtifacts(dir string, targets []targetPlatform, runner buildRunner) ([]string, error) {
-	artifacts := make([]string, 0, len(targets))
+func buildArtifacts(dir string, targets []targetPlatform, runner buildRunner) ([]builtArtifact, error) {
+	artifacts := make([]builtArtifact, 0, len(targets))
 	for _, target := range targets {
 		output := filepath.Join(dir, artifactName(target))
 		fmt.Printf("==> build %s/%s: %s\n", target.goos, target.goarch, output)
 		if err := runner(target, output); err != nil {
 			return nil, err
 		}
-		artifacts = append(artifacts, output)
+		artifacts = append(artifacts, builtArtifact{target: target, path: output})
 	}
 	return artifacts, nil
 }
 
-func runGoBuild(target targetPlatform, output string) error {
-	cmd := exec.Command("go", "build", "-trimpath", "-o", output, "./cmd/tyrano-parser")
-	cmd.Env = append(os.Environ(), "GOOS="+target.goos, "GOARCH="+target.goarch)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+func packageArtifacts(dir string, built []builtArtifact, version string, docs []string) ([]string, error) {
+	archives := make([]string, 0, len(built))
+	for _, artifact := range built {
+		dest := filepath.Join(dir, archiveName(artifact.target, version))
+		fmt.Printf("==> package %s\n", dest)
+		if err := createArchive(dest, archiveEntries(artifact.path, artifact.target, docs)); err != nil {
+			return nil, err
+		}
+		archives = append(archives, dest)
+	}
+	return archives, nil
+}
+
+func goBuilder(version string) buildRunner {
+	return func(target targetPlatform, output string) error {
+		cmd := exec.Command("go", goBuildArgs(output, version)...)
+		cmd.Env = append(os.Environ(),
+			"GOOS="+target.goos,
+			"GOARCH="+target.goarch,
+			// Static binaries keep the download runnable on any host of that
+			// platform, without a matching libc.
+			"CGO_ENABLED=0",
+		)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		return cmd.Run()
+	}
 }
 
 func writeChecksums(dir string, artifacts []string) error {
@@ -82,18 +122,62 @@ func prepareDist(dir string) error {
 }
 
 func main() {
+	if err := run(os.Args[1:]); err != nil {
+		fmt.Fprintf(os.Stderr, "release-snapshot failed: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+// buildRelease fills dist with exactly what should be published: one archive
+// per target plus their checksums. The raw binaries are staged inside dist and
+// removed again, so nothing unpublishable is left behind.
+func buildRelease(version string, runner buildRunner) ([]string, error) {
+	stage := filepath.Join(distDir, stageDirName)
 	if err := prepareDist(distDir); err != nil {
-		fmt.Fprintf(os.Stderr, "prepare dist failed: %v\n", err)
-		os.Exit(1)
+		return nil, err
 	}
-	artifacts, err := buildArtifacts(distDir, releasePlatforms(), runGoBuild)
+	if err := os.MkdirAll(stage, 0o755); err != nil {
+		return nil, err
+	}
+
+	built, err := buildArtifacts(stage, releasePlatforms(), runner)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "release snapshot failed: %v\n", err)
-		os.Exit(1)
+		return nil, err
 	}
-	if err := writeChecksums(distDir, artifacts); err != nil {
-		fmt.Fprintf(os.Stderr, "checksum failed: %v\n", err)
-		os.Exit(1)
+	archives, err := packageArtifacts(distDir, built, version, releaseDocs())
+	if err != nil {
+		return nil, err
 	}
-	fmt.Printf("wrote %d artifacts and checksums to %s\n", len(artifacts), distDir)
+	if err := os.RemoveAll(stage); err != nil {
+		return nil, err
+	}
+	if err := writeChecksums(distDir, archives); err != nil {
+		return nil, err
+	}
+	return archives, nil
+}
+
+func run(args []string) error {
+	version, err := resolveVersion(args, os.Getenv)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("==> release version: %s\n", version)
+
+	archives, err := buildRelease(version, goBuilder(version))
+	if err != nil {
+		return err
+	}
+
+	host := targetPlatform{goos: runtime.GOOS, goarch: runtime.GOARCH}
+	if slices.Contains(releasePlatforms(), host) {
+		if err := verifyHostArchive(distDir, version, host); err != nil {
+			return err
+		}
+	} else {
+		fmt.Printf("==> skip runnable check: %s/%s is not a release target\n", host.goos, host.goarch)
+	}
+
+	fmt.Printf("wrote %d archives and checksums for %s to %s\n", len(archives), version, distDir)
+	return nil
 }

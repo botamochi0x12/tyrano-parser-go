@@ -24,3 +24,27 @@ jobs:
 
       - name: Run local CI
         run: go run ./tools/ci
+
+  # Exercises the release path on every change, so packaging breaks surface in
+  # a pull request instead of on a tag that is already public.
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Build and verify release archives
+        run: go run ./tools/release-snapshot
+
+      - name: Upload snapshot archives
+        uses: actions/upload-artifact@v4
+        with:
+          name: tyrano-parser-snapshot
+          path: dist/
+          retention-days: 7
