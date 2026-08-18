@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -154,6 +156,15 @@ func run(args []string) error {
 	}
 	if err := writeChecksums(distDir, archives); err != nil {
 		return err
+	}
+
+	host := targetPlatform{goos: runtime.GOOS, goarch: runtime.GOARCH}
+	if slices.Contains(releasePlatforms(), host) {
+		if err := verifyHostArchive(distDir, version, host); err != nil {
+			return err
+		}
+	} else {
+		fmt.Printf("==> skip runnable check: %s/%s is not a release target\n", host.goos, host.goarch)
 	}
 
 	fmt.Printf("wrote %d archives and checksums for %s to %s\n", len(archives), version, distDir)
