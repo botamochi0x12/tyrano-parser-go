@@ -37,6 +37,17 @@ type ScenarioRef struct {
 	UI       bool     `json:"ui"`
 }
 
+// isDynamic reports whether the named field is still a runtime expression
+// rather than a value the scan could pin down.
+func (r ScenarioRef) isDynamic(field string) bool {
+	for _, f := range r.Dynamic {
+		if f == field {
+			return true
+		}
+	}
+	return false
+}
+
 var refTags = map[string]string{
 	"call":       RefKindFlow,
 	"jump":       RefKindFlow,

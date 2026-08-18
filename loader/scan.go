@@ -3,6 +3,7 @@ package loader
 import (
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/botamochi0x12/tyrano-parser-go/parser"
@@ -26,10 +27,7 @@ func ScanProject(layout *ProjectLayout, tp *parser.TyranoParser) (*types.Project
 	scan.Scenarios = scenarios
 	scan.Issues.Merge(walkResult)
 
-	allRefs := make([]ScenarioRef, 0)
-	for relPath, scenario := range scenarios {
-		allRefs = append(allRefs, ExtractRefs(relPath, scenario)...)
-	}
+	allRefs := extractProjectRefs(scenarios, collectProjectMacros(scenarios))
 	for _, r := range allRefs {
 		resolveRef(r, scenarios, scan.Issues)
 	}
@@ -55,40 +53,95 @@ func ResolveFrom(layout *ProjectLayout, tp *parser.TyranoParser, entrypoint stri
 
 	queue := []string{startRel}
 	visited := map[string]bool{}
-	allRefs := make([]ScenarioRef, 0)
-	for len(queue) > 0 {
-		rel := queue[0]
-		queue = queue[1:]
-		if visited[rel] {
-			continue
-		}
-		visited[rel] = true
-		scenario, result, loadErr := LoadScenarioFile(filepath.Join(layout.ScenarioDir, filepath.FromSlash(rel)), tp)
-		if loadErr != nil {
-			issue := types.NewParseError(types.MissingStorageError, 0, 0,
-				fmt.Sprintf("referenced storage %q not found", rel))
-			issue.WithContext("entrypoint or call chain")
-			scan.Issues.AddIssue(*issue)
-			continue
-		}
-		scan.Scenarios[rel] = scenario
-		if result != nil {
-			scan.Issues.Merge(result)
-		}
-		refs := ExtractRefs(rel, scenario)
-		allRefs = append(allRefs, refs...)
-		for _, r := range refs {
-			storage := filepath.ToSlash(r.Storage)
-			if storage != "" && !isDynamicRefValue(storage) && !visited[storage] {
-				queue = append(queue, storage)
+	macros := MacroTable{}
+	var allRefs []ScenarioRef
+	// A macro can be defined in a file loaded after its call site, so keep
+	// re-extracting until the macro table stops revealing new storages.
+	for {
+		for len(queue) > 0 {
+			rel := queue[0]
+			queue = queue[1:]
+			if visited[rel] {
+				continue
 			}
+			visited[rel] = true
+			scenario, result, loadErr := LoadScenarioFile(filepath.Join(layout.ScenarioDir, filepath.FromSlash(rel)), tp)
+			if loadErr != nil {
+				issue := types.NewParseError(types.MissingStorageError, 0, 0,
+					fmt.Sprintf("referenced storage %q not found", rel))
+				issue.WithContext("entrypoint or call chain")
+				scan.Issues.AddIssue(*issue)
+				continue
+			}
+			scan.Scenarios[rel] = scenario
+			if result != nil {
+				scan.Issues.Merge(result)
+			}
+			for name, def := range CollectMacros(rel, scenario) {
+				macros[name] = def
+			}
+			queue = append(queue, unvisitedStorages(ExtractRefs(rel, scenario), visited)...)
 		}
+		allRefs = extractProjectRefs(scan.Scenarios, macros)
+		next := unvisitedStorages(allRefs, visited)
+		if len(next) == 0 {
+			break
+		}
+		queue = append(queue, next...)
 	}
 	for _, r := range allRefs {
 		resolveRefVisited(r, scan.Scenarios, scan.Issues)
 	}
 	scan.Refs = refRecords(allRefs)
 	return scan, nil
+}
+
+// collectProjectMacros merges every scenario's macro definitions. Files are
+// visited in name order so a name defined twice resolves the same way on every
+// run.
+func collectProjectMacros(scenarios map[string]*types.ParsedScenario) MacroTable {
+	out := MacroTable{}
+	for _, rel := range sortedKeys(scenarios) {
+		for name, def := range CollectMacros(rel, scenarios[rel]) {
+			out[name] = def
+		}
+	}
+	return out
+}
+
+// extractProjectRefs collects the refs of every scenario in name order, so the
+// emitted list is stable across runs.
+func extractProjectRefs(scenarios map[string]*types.ParsedScenario, macros MacroTable) []ScenarioRef {
+	out := make([]ScenarioRef, 0)
+	for _, rel := range sortedKeys(scenarios) {
+		out = append(out, ExtractRefsWithMacros(rel, scenarios[rel], macros)...)
+	}
+	return out
+}
+
+func sortedKeys(scenarios map[string]*types.ParsedScenario) []string {
+	keys := make([]string, 0, len(scenarios))
+	for k := range scenarios {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// unvisitedStorages returns the statically known storages the refs name that
+// have not been loaded yet.
+func unvisitedStorages(refs []ScenarioRef, visited map[string]bool) []string {
+	out := make([]string, 0)
+	seen := map[string]bool{}
+	for _, r := range refs {
+		storage := filepath.ToSlash(r.Storage)
+		if storage == "" || r.isDynamic("storage") || visited[storage] || seen[storage] {
+			continue
+		}
+		seen[storage] = true
+		out = append(out, storage)
+	}
+	return out
 }
 
 func newProjectScan(layout *ProjectLayout) *types.ProjectScan {
@@ -103,7 +156,7 @@ func newProjectScan(layout *ProjectLayout) *types.ProjectScan {
 func resolveRef(r ScenarioRef, scenarios map[string]*types.ParsedScenario, issues *types.ParseResult) {
 	var labelHost *types.ParsedScenario
 	if r.Storage != "" {
-		if isDynamicRefValue(r.Storage) {
+		if r.isDynamic("storage") {
 			return
 		}
 		host, ok := scenarios[filepath.ToSlash(r.Storage)]
@@ -118,10 +171,10 @@ func resolveRef(r ScenarioRef, scenarios map[string]*types.ParsedScenario, issue
 	} else {
 		labelHost = scenarios[r.From]
 	}
-	if r.Target == "" || labelHost == nil || isDynamicRefValue(r.Target) {
+	if r.Target == "" || labelHost == nil || r.isDynamic("target") {
 		return
 	}
-	if _, ok := labelHost.Labels[trimTarget(r.Target)]; !ok {
+	if _, ok := labelHost.Labels[r.Label]; !ok {
 		issue := types.NewParseError(types.MissingLabelError, r.Line, 1,
 			fmt.Sprintf("referenced label %q not found", r.Target))
 		issue.WithContext(fmt.Sprintf("from=%s tag=%s storage=%s", r.From, r.Tag, r.Storage))
@@ -135,7 +188,7 @@ func resolveRefVisited(r ScenarioRef, scenarios map[string]*types.ParsedScenario
 	}
 	host := r.From
 	if r.Storage != "" {
-		if isDynamicRefValue(r.Storage) {
+		if r.isDynamic("storage") {
 			return
 		}
 		host = filepath.ToSlash(r.Storage)
@@ -144,10 +197,10 @@ func resolveRefVisited(r ScenarioRef, scenarios map[string]*types.ParsedScenario
 	if !ok {
 		return
 	}
-	if isDynamicRefValue(r.Target) {
+	if r.isDynamic("target") {
 		return
 	}
-	if _, ok := scenario.Labels[trimTarget(r.Target)]; !ok {
+	if _, ok := scenario.Labels[r.Label]; !ok {
 		issue := types.NewParseError(types.MissingLabelError, r.Line, 1,
 			fmt.Sprintf("referenced label %q not found", r.Target))
 		issue.WithContext(fmt.Sprintf("from=%s tag=%s storage=%s", r.From, r.Tag, r.Storage))
@@ -182,16 +235,22 @@ func trimTarget(target string) string {
 	return strings.TrimPrefix(target, "*")
 }
 
-func isDynamicRefValue(value string) bool {
-	return strings.HasPrefix(strings.TrimSpace(value), "&")
-}
-
 func refRecords(refs []ScenarioRef) []types.ScenarioRefRecord {
 	out := make([]types.ScenarioRefRecord, 0, len(refs))
 	for _, r := range refs {
 		out = append(out, types.ScenarioRefRecord{
-			From: r.From, Line: r.Line, Tag: r.Tag,
-			Storage: r.Storage, Target: r.Target,
+			From:     r.From,
+			Line:     r.Line,
+			Tag:      r.Tag,
+			Kind:     r.Kind,
+			Storage:  r.Storage,
+			Target:   r.Target,
+			Label:    r.Label,
+			Text:     r.Text,
+			Macro:    r.Macro,
+			Dynamic:  r.Dynamic,
+			Resolved: r.Resolved,
+			UI:       r.UI,
 		})
 	}
 	return out
