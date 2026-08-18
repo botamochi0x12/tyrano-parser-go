@@ -78,10 +78,15 @@ func createTarGz(dest string, entries []archiveEntry) error {
 		if err != nil {
 			return err
 		}
+		info, err := os.Stat(entry.path)
+		if err != nil {
+			return err
+		}
 		header := &tar.Header{
-			Name: entry.name,
-			Mode: int64(entry.mode),
-			Size: int64(len(body)),
+			Name:    entry.name,
+			Mode:    int64(entry.mode),
+			Size:    int64(len(body)),
+			ModTime: info.ModTime(),
 		}
 		if err := writer.WriteHeader(header); err != nil {
 			return err
@@ -103,7 +108,11 @@ func createZip(dest string, entries []archiveEntry) error {
 	defer writer.Close()
 
 	for _, entry := range entries {
-		header := &zip.FileHeader{Name: entry.name, Method: zip.Deflate}
+		info, err := os.Stat(entry.path)
+		if err != nil {
+			return err
+		}
+		header := &zip.FileHeader{Name: entry.name, Method: zip.Deflate, Modified: info.ModTime()}
 		header.SetMode(entry.mode)
 		target, err := writer.CreateHeader(header)
 		if err != nil {

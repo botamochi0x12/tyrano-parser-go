@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
+	"time"
 )
 
 func TestArchiveName(t *testing.T) {
@@ -117,6 +118,28 @@ func TestCreateArchiveTarGzKeepsBinaryExecutable(t *testing.T) {
 
 	if mode := tarEntryMode(t, dest, "tyrano-parser"); mode&0o111 == 0 {
 		t.Fatalf("archived binary mode = %v, want the executable bit preserved", mode)
+	}
+}
+
+func TestCreateArchiveStampsModificationTimes(t *testing.T) {
+	dir := t.TempDir()
+	binary := filepath.Join(dir, "tyrano-parser_linux_amd64")
+	writeFile(t, binary, "binary body")
+	dest := filepath.Join(dir, "tyrano-parser_v1.2.3_linux_amd64.tar.gz")
+
+	entries := archiveEntries(binary, targetPlatform{goos: "linux", goarch: "amd64"}, nil)
+	if err := createArchive(dest, entries); err != nil {
+		t.Fatalf("createArchive() error = %v", err)
+	}
+
+	info, err := os.Stat(binary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := info.ModTime()
+	got := tarEntryModTime(t, dest, "tyrano-parser")
+	if diff := got.Sub(want); diff > time.Second || diff < -time.Second {
+		t.Fatalf("archived binary mtime = %s, want the source timestamp %s", got, want)
 	}
 }
 
@@ -233,6 +256,16 @@ func readTarGz(t *testing.T, path string) map[string]string {
 
 func tarEntryMode(t *testing.T, path, name string) fs.FileMode {
 	t.Helper()
+	return fs.FileMode(tarEntryHeader(t, path, name).Mode)
+}
+
+func tarEntryModTime(t *testing.T, path, name string) time.Time {
+	t.Helper()
+	return tarEntryHeader(t, path, name).ModTime
+}
+
+func tarEntryHeader(t *testing.T, path, name string) *tar.Header {
+	t.Helper()
 	file, err := os.Open(path)
 	if err != nil {
 		t.Fatal(err)
@@ -253,7 +286,7 @@ func tarEntryMode(t *testing.T, path, name string) fs.FileMode {
 			t.Fatal(err)
 		}
 		if header.Name == name {
-			return fs.FileMode(header.Mode)
+			return header
 		}
 	}
 }
