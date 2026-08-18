@@ -93,6 +93,58 @@ func TestCLI_Scan_MinimalProject(t *testing.T) {
 	}
 }
 
+// TestCLI_Scan_BranchingProject pins the reference record a downstream branch
+// dump reads, on a project whose choices go through a macro.
+func TestCLI_Scan_BranchingProject(t *testing.T) {
+	root := filepath.Join("testdata", "projects", "branching")
+	stdout, stderr, code := runCLI(t, "scan", "--project-root", root)
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %s", code, stderr)
+	}
+	var got struct {
+		Refs []map[string]any `json:"refs"`
+	}
+	if err := json.Unmarshal(stdout, &got); err != nil {
+		t.Fatalf("invalid JSON: %v\noutput: %s", err, stdout)
+	}
+
+	choice := refFrom(t, got.Refs, "first.ks", "link")
+	want := map[string]any{
+		"kind":     "choice",
+		"storage":  "route_a.ks",
+		"target":   "*good_end",
+		"label":    "good_end",
+		"text":     "森へ行く",
+		"macro":    "sel",
+		"resolved": true,
+		"ui":       false,
+	}
+	for key, value := range want {
+		if choice[key] != value {
+			t.Errorf("choice ref %q = %#v, want %#v", key, choice[key], value)
+		}
+	}
+
+	button := refFrom(t, got.Refs, "config.ks", "button")
+	if button["ui"] != true || button["resolved"] != false {
+		t.Errorf("config button = %#v, want an unresolved UI control", button)
+	}
+	if button["text"] != "" {
+		t.Errorf("config button text = %#v, want empty", button["text"])
+	}
+}
+
+func refFrom(t *testing.T, refs []map[string]any, from, tag string) map[string]any {
+	t.Helper()
+	for _, r := range refs {
+		if r["from"] == from && r["tag"] == tag {
+			return r
+		}
+	}
+	t.Fatalf("no %s ref from %s in %#v", tag, from, refs)
+	return nil
+}
+
 func TestCLI_UnknownCommand_Exit3(t *testing.T) {
 	_, _, code := runCLI(t, "bogus")
 	if code != 3 {
