@@ -56,6 +56,52 @@ func TestRenderScenarioReport_HappyPath(t *testing.T) {
 	}
 }
 
+func TestRenderScanReport_ChoiceLineShowsTextAndPlainLabel(t *testing.T) {
+	out := scanOutput{
+		Kind: "project_scan",
+		Root: "/p",
+		Refs: []types.ScenarioRefRecord{{
+			From: "scene1.ks", Line: 3, Tag: "link", Kind: "choice",
+			Storage: "route_a.ks", Target: "*good_end", Label: "good_end",
+			Text: "森へ行く", Macro: "sel", Resolved: true,
+		}},
+	}
+	var buf bytes.Buffer
+	if err := renderScanReport(&buf, out); err != nil {
+		t.Fatal(err)
+	}
+	got := buf.String()
+	for _, want := range []string{"scene1.ks:3", "choice", "森へ行く", "storage=\"route_a.ks\"", "label=\"good_end\"", "via sel"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "*good_end") {
+		t.Errorf("report still shows the raw asterisk label in:\n%s", got)
+	}
+}
+
+func TestRenderScanReport_UnresolvedUIButtonIsMarked(t *testing.T) {
+	out := scanOutput{
+		Kind: "project_scan",
+		Root: "/p",
+		Refs: []types.ScenarioRefRecord{{
+			From: "config.ks", Line: 7, Tag: "button", Kind: "choice",
+			Target: "&mp.target", Dynamic: []string{"target"}, UI: true,
+		}},
+	}
+	var buf bytes.Buffer
+	if err := renderScanReport(&buf, out); err != nil {
+		t.Fatal(err)
+	}
+	got := buf.String()
+	for _, want := range []string{"config.ks:7", "ui", "target=\"&mp.target\"", "unresolved: target"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in:\n%s", want, got)
+		}
+	}
+}
+
 func TestRenderScanReport_HappyPath(t *testing.T) {
 	out := scanOutput{
 		Kind:      "project_scan",

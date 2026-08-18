@@ -85,4 +85,45 @@ go run ./cmd/tyrano-parser scan --project-root tyranoscript first.ks --format re
 }
 ```
 
+### Reference records
+
+Each entry in `refs` is one outgoing reference, listed in scenario-name order so
+two runs over the same project produce the same output:
+
+```json
+{
+  "from": "scene1.ks",
+  "line": 4,
+  "tag": "link",
+  "kind": "choice",
+  "storage": "route_a.ks",
+  "target": "*good_end",
+  "label": "good_end",
+  "text": "森へ行く",
+  "macro": "sel",
+  "resolved": true,
+  "ui": false
+}
+```
+
+| Field | Meaning |
+| ----- | ------- |
+| `from`, `line` | Where the reference is written. For a macro call this is the call site, not the macro definition. |
+| `tag` | The tag that made the reference: `call`, `jump`, `link`, `glink`, `button`, `s_button`, `showbutton`. |
+| `kind` | `choice` for a control the player picks, `flow` for `call` / `jump`. |
+| `storage`, `target` | Exactly what the script wrote, including a value only known at runtime such as `&f.next`. |
+| `label` | `target` without its leading `*`, so it can be printed without Markdown reading it as italics. Empty while `target` is unresolved. |
+| `text` | The wording a player reads: the `text` parameter, or the body of a `[link] … [endlink]` pair. |
+| `macro` | The macro this reference was expanded from. Absent when the reference is written directly. |
+| `dynamic` | The fields still holding runtime expressions — any of `storage`, `target`, `text`. Absent when there are none. |
+| `resolved` | True only when `dynamic` is empty. |
+| `ui` | True for a textless control bound to a runtime destination: a system menu button rather than a story branch. |
+
+Macro calls are expanded before references are collected, so a choice written as
+`[my_choice storage="route_a.ks" target="*good_end" text="森へ行く"]` reports what
+the call site binds instead of the `%storage` and `&mp.target` placeholders in
+the macro body. References written *inside* a `[macro]` body are not reported on
+their own — they only become branches once called. When a call site leaves an
+argument unbound, the field stays as written and is listed in `dynamic`.
+
 To call the same functionality from Go instead, see the [Go API](go-api.md).
