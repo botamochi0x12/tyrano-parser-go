@@ -728,3 +728,89 @@ Hello world`,
 		})
 	}
 }
+
+// TestScenarioParser_Parse_ScriptBlockTagNameDetection asserts that
+// [iscript]/[endscript] are recognized by tag name, not by exact-line string
+// comparison, so a real parameter such as [endscript stop=""] or the
+// @endscript shorthand still closes the block instead of letting it swallow
+// the rest of the file as script_content.
+func TestScenarioParser_Parse_ScriptBlockTagNameDetection(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected *types.ParsedScenario
+	}{
+		{
+			name: "endscript with an attribute still closes the block",
+			input: `[iscript]
+var x = 10;
+[endscript stop=""]
+Hello world`,
+			expected: &types.ParsedScenario{
+				Elements: []types.ParsedTag{
+					{Name: "iscript", Parameters: map[string]string{}, Value: "", Line: 1},
+					{Name: "script_content", Parameters: map[string]string{}, Value: "var x = 10;", Line: 2},
+					{Name: "endscript", Parameters: map[string]string{}, Value: "", Line: 3},
+					{Name: "text", Parameters: map[string]string{}, Value: "Hello world", Line: 4},
+				},
+			},
+		},
+		{
+			name: "the @endscript shorthand also closes the block",
+			input: `[iscript]
+var x = 10;
+@endscript
+Hello world`,
+			expected: &types.ParsedScenario{
+				Elements: []types.ParsedTag{
+					{Name: "iscript", Parameters: map[string]string{}, Value: "", Line: 1},
+					{Name: "script_content", Parameters: map[string]string{}, Value: "var x = 10;", Line: 2},
+					{Name: "endscript", Parameters: map[string]string{}, Value: "", Line: 3},
+					{Name: "text", Parameters: map[string]string{}, Value: "Hello world", Line: 4},
+				},
+			},
+		},
+		{
+			name: "iscript with an attribute still opens the block",
+			input: `[iscript cond="tf.debug"]
+var x = 10;
+[endscript]
+Hello world`,
+			expected: &types.ParsedScenario{
+				Elements: []types.ParsedTag{
+					{Name: "iscript", Parameters: map[string]string{}, Value: "", Line: 1},
+					{Name: "script_content", Parameters: map[string]string{}, Value: "var x = 10;", Line: 2},
+					{Name: "endscript", Parameters: map[string]string{}, Value: "", Line: 3},
+					{Name: "text", Parameters: map[string]string{}, Value: "Hello world", Line: 4},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sp := NewScenarioParser()
+
+			result, err := sp.Parse(tt.input)
+			if err != nil {
+				t.Fatalf("Parse() error = %v", err)
+			}
+
+			if len(result.Elements) != len(tt.expected.Elements) {
+				t.Fatalf("Parse().Elements = %#v, want %d elements matching %#v", result.Elements, len(tt.expected.Elements), tt.expected.Elements)
+			}
+
+			for i, element := range result.Elements {
+				if element.Name != tt.expected.Elements[i].Name {
+					t.Errorf("Parse().Elements[%d].Name = %v, want %v", i, element.Name, tt.expected.Elements[i].Name)
+				}
+				if element.Line != tt.expected.Elements[i].Line {
+					t.Errorf("Parse().Elements[%d].Line = %v, want %v", i, element.Line, tt.expected.Elements[i].Line)
+				}
+				if element.Value != tt.expected.Elements[i].Value {
+					t.Errorf("Parse().Elements[%d].Value = %v, want %v", i, element.Value, tt.expected.Elements[i].Value)
+				}
+			}
+		})
+	}
+}

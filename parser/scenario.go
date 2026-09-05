@@ -48,6 +48,31 @@ func NewScenarioParserWithOptions(options ParserOptions) *ScenarioParser {
 	}
 }
 
+// scriptBlockTagName returns the tag name of a trimmed line that is either a
+// bracketed tag ([name ...]) or the "@name ..." shorthand, or "" if the line
+// is neither. [iscript]/[endscript] detection uses this instead of exact
+// string equality so that a real parameter (e.g. [endscript stop=""],
+// [iscript cond="..."]) or the @endscript shorthand is still recognized by
+// tag name, matching how kag.parser.js and its TypeScript reimplementation
+// identify these tags.
+func scriptBlockTagName(trimmedLine string) string {
+	var content string
+	switch {
+	case strings.HasPrefix(trimmedLine, "@"):
+		content = trimmedLine[1:]
+	case strings.HasPrefix(trimmedLine, "[") && strings.HasSuffix(trimmedLine, "]"):
+		content = trimmedLine[1 : len(trimmedLine)-1]
+	default:
+		return ""
+	}
+
+	fields := strings.Fields(content)
+	if len(fields) == 0 {
+		return ""
+	}
+	return fields[0]
+}
+
 // Parse parses scenario content and returns a ParsedScenario
 func (sp *ScenarioParser) Parse(content string) (*types.ParsedScenario, error) {
 	scenario, result := sp.ParseWithResult(content)
@@ -109,7 +134,7 @@ func (sp *ScenarioParser) ParseWithResult(content string) (*types.ParsedScenario
 
 		// Handle script blocks
 		if inScriptBlock {
-			if strings.TrimSpace(line) == "[endscript]" {
+			if scriptBlockTagName(line) == "endscript" {
 				// End of script block
 				inScriptBlock = false
 
@@ -135,7 +160,7 @@ func (sp *ScenarioParser) ParseWithResult(content string) (*types.ParsedScenario
 			}
 		}
 
-		if strings.TrimSpace(line) == "[iscript]" {
+		if scriptBlockTagName(line) == "iscript" {
 			// Start of script block
 			inScriptBlock = true
 			scriptStartLine = sp.currentLine
