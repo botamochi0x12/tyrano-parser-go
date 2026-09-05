@@ -476,14 +476,30 @@ func (sp *ScenarioParser) parseTextLine(line, originalLine string) []*types.Pars
 				i++
 			}
 
+			// Extract and parse tag
+			tagStr := string(runes[tagStart:i])
+
 			// Check for unmatched brackets
 			if bracketDepth > 0 {
+				// A stray quote right before the tag's real closing "]"
+				// makes the scanner above think it is still inside a
+				// quoted value, so the "]" is swallowed as quoted content
+				// instead of closing the tag. tagStr already ran to the
+				// end of the line, so it still ends with that "]" — try
+				// parsing it as-is and, on success, recover the tag with a
+				// warning instead of discarding the line (matches
+				// kag.parser.js's compensate_missing_quart).
+				if strings.HasSuffix(tagStr, "]") {
+					if parsedTag, err := sp.tagParser.ParseTag(tagStr, sp.currentLine); err == nil {
+						sp.result.AddWarningWithContext(types.SyntaxError, sp.currentLine, tagStart+1, "compensated a missing quote termination in tag", originalLine)
+						tags = append(tags, parsedTag)
+						continue
+					}
+				}
 				sp.result.AddErrorWithContext(types.SyntaxError, sp.currentLine, tagStart+1, "unmatched opening bracket in tag", originalLine)
 				continue
 			}
 
-			// Extract and parse tag
-			tagStr := string(runes[tagStart:i])
 			if parsedTag, err := sp.tagParser.ParseTag(tagStr, sp.currentLine); err == nil {
 				tags = append(tags, parsedTag)
 			} else {

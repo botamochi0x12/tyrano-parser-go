@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/botamochi0x12/tyrano-parser-go/types"
@@ -724,6 +725,66 @@ Hello world`,
 				if element.Value != tt.expected.Elements[i].Value {
 					t.Errorf("Parse().Elements[%d].Value = %v, want %v", i, element.Value, tt.expected.Elements[i].Value)
 				}
+			}
+		})
+	}
+}
+
+// TestScenarioParser_Parse_RecoversUnclosedQuoteInTag asserts that a stray
+// quote right before a tag's closing "]" (a missing/extra quote that makes
+// the scanner think it is still inside a quoted value) downgrades to a
+// warning and still yields the tag, instead of being discarded as an
+// "unmatched opening bracket" error. Real-world repro data:
+// TyranoBuilderCore/system/tyrano/data/scenario/title_screen.ks:11 and
+// tyranosyntax/test_ks.ks:289.
+func TestScenarioParser_Parse_RecoversUnclosedQuoteInTag(t *testing.T) {
+	tests := []struct {
+		name          string
+		input         string
+		wantTagName   string
+		wantParamName string
+		wantParamHas  string
+	}{
+		{
+			name:          "stray trailing quote before ] still yields the tag",
+			input:         "[button x=166 y=408 graphic=\"title/button_cg.gif\"  storage=cg.ks\"]\n",
+			wantTagName:   "button",
+			wantParamName: "storage",
+			wantParamHas:  "cg.ks",
+		},
+		{
+			name:          "unquoted macro placeholder followed by a stray quote",
+			input:         "[hoge param=%hoge']\n",
+			wantTagName:   "hoge",
+			wantParamName: "param",
+			wantParamHas:  "%hoge",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sp := NewScenarioParser()
+			scenario, result := sp.ParseWithResult(tt.input)
+
+			if result.HasErrors() {
+				t.Fatalf("ParseWithResult() unexpected errors: %v", result.GetErrors())
+			}
+			if !result.HasWarnings() {
+				t.Fatal("ParseWithResult() want a warning recording the recovered tag, got none")
+			}
+
+			var found *types.ParsedTag
+			for i := range scenario.Elements {
+				if scenario.Elements[i].Name == tt.wantTagName {
+					found = &scenario.Elements[i]
+					break
+				}
+			}
+			if found == nil {
+				t.Fatalf("ParseWithResult() dropped the %q tag entirely: %#v", tt.wantTagName, scenario.Elements)
+			}
+			if !strings.Contains(found.Parameters[tt.wantParamName], tt.wantParamHas) {
+				t.Errorf("%s = %q, want it to contain %q", tt.wantParamName, found.Parameters[tt.wantParamName], tt.wantParamHas)
 			}
 		})
 	}
