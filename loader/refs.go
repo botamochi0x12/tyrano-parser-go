@@ -49,13 +49,12 @@ func (r ScenarioRef) isDynamic(field string) bool {
 }
 
 var refTags = map[string]string{
-	"call":       RefKindFlow,
-	"jump":       RefKindFlow,
-	"link":       RefKindChoice,
-	"glink":      RefKindChoice,
-	"button":     RefKindChoice,
-	"s_button":   RefKindChoice,
-	"showbutton": RefKindChoice,
+	"call":      RefKindFlow,
+	"jump":      RefKindFlow,
+	"link":      RefKindChoice,
+	"glink":     RefKindChoice,
+	"button":    RefKindChoice,
+	"clickable": RefKindChoice,
 }
 
 // ExtractRefs returns the references a scenario makes, without expanding macro

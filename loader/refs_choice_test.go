@@ -44,8 +44,8 @@ func TestExtractRefs_GlinkTextParameterBecomesChoiceText(t *testing.T) {
 
 func TestExtractRefs_ButtonFamilyIsCollected(t *testing.T) {
 	src := "[button graphic=\"a.png\" target=\"*x\" text=\"開始\"]\n" +
-		"[s_button storage=\"b.ks\" text=\"設定\"]\n" +
-		"[showbutton target=\"*y\" text=\"戻る\"]\n"
+		"[glink storage=\"b.ks\" text=\"設定\"]\n" +
+		"[clickable width=100 height=100 storage=\"c.ks\" target=\"*y\" text=\"戻る\"]\n"
 	refs := refsOf(t, "menu.ks", src)
 	if len(refs) != 3 {
 		t.Fatalf("ExtractRefs() returned %d refs, want 3: %#v", len(refs), refs)
@@ -57,6 +57,19 @@ func TestExtractRefs_ButtonFamilyIsCollected(t *testing.T) {
 		if r.Kind != RefKindChoice {
 			t.Errorf("ref %#v Kind = %q, want %q", r, r.Kind, RefKindChoice)
 		}
+	}
+}
+
+// TestExtractRefs_NonexistentButtonTagsAreNotCollected asserts that s_button
+// and showbutton — tags that do not exist in TyranoScript (absent from
+// kag.tag*.js, tyranosyntax's snippet catalog, and TyranoStudioCore's tag
+// catalog) — are not treated as cross-reference sources.
+func TestExtractRefs_NonexistentButtonTagsAreNotCollected(t *testing.T) {
+	src := "[s_button storage=\"b.ks\" text=\"設定\"]\n" +
+		"[showbutton target=\"*y\" text=\"戻る\"]\n"
+	refs := refsOf(t, "menu.ks", src)
+	if len(refs) != 0 {
+		t.Fatalf("ExtractRefs() returned %d refs, want 0 for nonexistent tags: %#v", len(refs), refs)
 	}
 }
 
