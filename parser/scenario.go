@@ -46,8 +46,18 @@ func NewScenarioParserWithOptions(options ParserOptions) *ScenarioParser {
 // is neither. [iscript]/[endscript] detection uses this instead of exact
 // string equality so that a real parameter (e.g. [endscript stop=""],
 // [iscript cond="..."]) or the @endscript shorthand is still recognized by
-// tag name, matching how kag.parser.js and its TypeScript reimplementation
-// identify these tags.
+// tag name.
+//
+// This splits the difference between the two reference implementations:
+// kag.parser.js matches endscript via line_str.indexOf("endscript") != -1, a
+// bare substring search that also fires inside a comment or a JS string
+// literal; the TypeScript reimplementation's /^(\[endscript\s*\]|@endscript\b)/
+// (tyranoscript/src/core/parser.ts:116) avoids that false-positive risk but
+// doesn't match an attributed [endscript stop=""] at all, since \s*\] only
+// allows whitespace before the bracket. Requiring the whole trimmed line to
+// be one bracketed or "@" tag, then comparing just its first token, accepts
+// the attributed form like kag.parser.js while still rejecting a stray
+// "endscript" inside other text like the TypeScript version.
 func scriptBlockTagName(trimmedLine string) string {
 	var content string
 	switch {
@@ -420,6 +430,26 @@ func (sp *ScenarioParser) parseTextLine(line, originalLine string) []*types.Pars
 				// parsing it as-is and, on success, recover the tag with a
 				// warning instead of discarding the line (matches
 				// kag.parser.js's compensate_missing_quart).
+				//
+				// This recovery is deliberately as limited as the original:
+				//   - If a second, well-formed tag follows on the same line
+				//     (e.g. `[link storage="a.ks] [link storage="b.ks"]`),
+				//     the runaway quote swallows everything up to the
+				//     line's final "]", so the two tags merge into one and
+				//     the second tag's reference is lost — with no error,
+				//     only this warning. kag.parser.js has the same gap:
+				//     its state machine only resettles at end of line too.
+				//   - The recovered parameter value is not cleaned up: the
+				//     stray quote character stays in it (e.g. storage
+				//     becomes `cg.ks"` rather than `cg.ks`), so a
+				//     downstream reference check can still fail to resolve
+				//     it. kag.parser.js's makeParam has the same behavior —
+				//     an unquoted value only ends at whitespace, so the
+				//     extra quote is kept literally.
+				//   Both match kag.parser.js on purpose: this parser mirrors
+				//   what the real engine accepts, and a scenario the engine
+				//   itself cannot cleanly interpret is not this parser's to
+				//   fix up.
 				if strings.HasSuffix(tagStr, "]") {
 					if parsedTag, err := sp.tagParser.ParseTag(tagStr, sp.currentLine); err == nil {
 						sp.result.AddWarningWithContext(types.SyntaxError, sp.currentLine, tagStart+1, "compensated a missing quote termination in tag", originalLine)
