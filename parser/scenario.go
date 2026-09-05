@@ -8,9 +8,6 @@ import (
 
 // ScenarioParser handles parsing of scenario files
 type ScenarioParser struct {
-	lexer       *Lexer
-	flagScript  bool
-	deepIf      int
 	currentLine int
 	tagParser   *TagParser
 	options     ParserOptions
@@ -21,8 +18,6 @@ type ScenarioParser struct {
 // NewScenarioParser creates a new ScenarioParser with default options
 func NewScenarioParser() *ScenarioParser {
 	return &ScenarioParser{
-		flagScript:  false,
-		deepIf:      0,
 		currentLine: 1,
 		tagParser:   NewTagParser("false"),
 		options: ParserOptions{
@@ -38,8 +33,6 @@ func NewScenarioParser() *ScenarioParser {
 // NewScenarioParserWithOptions creates a new ScenarioParser with specified options
 func NewScenarioParserWithOptions(options ParserOptions) *ScenarioParser {
 	return &ScenarioParser{
-		flagScript:  false,
-		deepIf:      0,
 		currentLine: 1,
 		tagParser:   NewTagParser(options.KeepSpaceInParameterValue),
 		options:     options,
@@ -89,7 +82,6 @@ func (sp *ScenarioParser) ParseWithResult(content string) (*types.ParsedScenario
 	sp.result = types.NewParseResult()
 	sp.labelMap = make(map[string]bool)
 	scenario := types.NewParsedScenario()
-	sp.lexer = NewLexer(content)
 	sp.currentLine = 1
 	elementIndex := 0
 
@@ -352,67 +344,6 @@ func (sp *ScenarioParser) parseLabelLine(line, originalLine string) (*types.Pars
 	return tag, labelInfo
 }
 
-// parseTagLine parses a tag line ([tag param=value])
-func (sp *ScenarioParser) parseTagLine(line string) []*types.ParsedTag {
-	var tags []*types.ParsedTag
-
-	// Find all tags in the line
-	i := 0
-	runes := []rune(line)
-
-	for i < len(runes) {
-		// Find opening bracket
-		for i < len(runes) && runes[i] != '[' {
-			i++
-		}
-
-		if i >= len(runes) {
-			break
-		}
-
-		// Find matching closing bracket
-		start := i
-		bracketDepth := 0
-		inQuotes := false
-		quoteChar := rune(0)
-
-		for i < len(runes) {
-			ch := runes[i]
-
-			if !inQuotes {
-				if ch == '[' {
-					bracketDepth++
-				} else if ch == ']' {
-					bracketDepth--
-					if bracketDepth == 0 {
-						i++
-						break
-					}
-				} else if ch == '"' || ch == '\'' {
-					inQuotes = true
-					quoteChar = ch
-				}
-			} else {
-				if ch == quoteChar && (i == 0 || runes[i-1] != '\\') {
-					inQuotes = false
-					quoteChar = 0
-				}
-			}
-			i++
-		}
-
-		// Extract tag string
-		tagStr := string(runes[start:i])
-
-		// Parse the tag
-		if parsedTag, err := sp.tagParser.ParseTag(tagStr, sp.currentLine); err == nil {
-			tags = append(tags, parsedTag)
-		}
-	}
-
-	return tags
-}
-
 // parseTextLine parses a text line with mixed content (text and tags)
 func (sp *ScenarioParser) parseTextLine(line, originalLine string) []*types.ParsedTag {
 	var tags []*types.ParsedTag
@@ -510,40 +441,4 @@ func (sp *ScenarioParser) parseTextLine(line, originalLine string) []*types.Pars
 	}
 
 	return tags
-}
-
-// parseComment checks if a line is a comment and should be ignored
-func (sp *ScenarioParser) parseComment(line string) bool {
-	trimmed := strings.TrimSpace(line)
-
-	// Single line comment
-	if strings.HasPrefix(trimmed, ";") {
-		return true
-	}
-
-	// Block comment start
-	if strings.HasPrefix(trimmed, "/*") {
-		return true
-	}
-
-	return false
-}
-
-// parseScriptBlock checks if a line is a script block tag and returns the parsed tag
-func (sp *ScenarioParser) parseScriptBlock(line string) *types.ParsedTag {
-	trimmed := strings.TrimSpace(line)
-
-	// Check for [iscript] tag
-	if trimmed == "[iscript]" {
-		tag := types.NewParsedTag("iscript", sp.currentLine)
-		return tag
-	}
-
-	// Check for [endscript] tag
-	if trimmed == "[endscript]" {
-		tag := types.NewParsedTag("endscript", sp.currentLine)
-		return tag
-	}
-
-	return nil
 }
